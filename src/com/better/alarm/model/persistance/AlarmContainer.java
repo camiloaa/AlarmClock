@@ -16,6 +16,7 @@ import com.better.alarm.model.IAlarmContainer;
 import com.better.alarm.model.interfaces.Intents;
 import com.github.androidutils.logger.Logger;
 import com.github.androidutils.wakelock.WakeLockManager;
+import com.google.common.base.Preconditions;
 
 /**
  * Active record container for all alarm data.
@@ -164,8 +165,10 @@ public class AlarmContainer implements IAlarmContainer {
 
     private final Logger log;
     private final Context mContext;
+    private final WakeLockManager wakelocks;
 
-    public AlarmContainer(Cursor c, Logger logger, Context context) {
+    public AlarmContainer(Cursor c, Logger logger, Context context, WakeLockManager wakelocks) {
+        this.wakelocks = Preconditions.checkNotNull(wakelocks);
         log = logger;
         mContext = context;
         id = c.getInt(Columns.ALARM_ID_INDEX);
@@ -196,7 +199,8 @@ public class AlarmContainer implements IAlarmContainer {
         state = c.getString(Columns.ALARM_STATE_INDEX);
     }
 
-    public AlarmContainer(Logger logger, Context context) {
+    public AlarmContainer(Logger logger, Context context, WakeLockManager wakelocks) {
+        this.wakelocks = Preconditions.checkNotNull(wakelocks);
         log = logger;
         mContext = context;
 
@@ -226,7 +230,7 @@ public class AlarmContainer implements IAlarmContainer {
         intent.setAction(DataBaseService.SAVE_ALARM_ACTION);
         intent.putExtra("extra_values", values);
         intent.putExtra(Intents.EXTRA_ID, id);
-        WakeLockManager.getWakeLockManager().acquirePartialWakeLock(intent, "forDBService");
+        wakelocks.acquirePartialWakeLock(intent, "forDBService");
         mContext.startService(intent);
     }
 

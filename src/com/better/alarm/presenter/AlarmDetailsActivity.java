@@ -19,6 +19,13 @@ package com.better.alarm.presenter;
 
 import java.util.Calendar;
 
+import javax.inject.Inject;
+
+import roboguice.RoboGuice;
+import roboguice.activity.RoboPreferenceActivity;
+import roboguice.inject.ContentView;
+import roboguice.inject.InjectPreference;
+import roboguice.inject.InjectView;
 import android.app.AlertDialog;
 import android.app.TimePickerDialog;
 import android.content.DialogInterface;
@@ -30,7 +37,6 @@ import android.content.pm.ActivityInfo;
 import android.os.Bundle;
 import android.preference.CheckBoxPreference;
 import android.preference.Preference;
-import android.preference.PreferenceActivity;
 import android.preference.PreferenceManager;
 import android.preference.PreferenceScreen;
 import android.text.format.DateFormat;
@@ -42,7 +48,6 @@ import android.widget.EditText;
 import android.widget.ListView;
 
 import com.better.alarm.R;
-import com.better.alarm.model.AlarmsManager;
 import com.better.alarm.model.interfaces.Alarm;
 import com.better.alarm.model.interfaces.AlarmEditor;
 import com.better.alarm.model.interfaces.AlarmNotFoundException;
@@ -55,19 +60,19 @@ import com.github.androidutils.logger.Logger;
 /**
  * Manages each alarm
  */
-public class AlarmDetailsActivity extends PreferenceActivity implements Preference.OnPreferenceChangeListener,
+@ContentView(R.layout.details_activity)
+public class AlarmDetailsActivity extends RoboPreferenceActivity implements Preference.OnPreferenceChangeListener,
         OnCancelListener, TimePickerDialogFragment.AlarmTimePickerDialogHandler {
     public final static String M12 = "h:mm aa";
     public final static String M24 = "kk:mm";
-
-    private IAlarmsManager alarms;
-
+    @Inject private IAlarmsManager alarms;
+    @Inject private Logger logger;
     private EditText mLabel;
-    private CheckBoxPreference mEnabledPref;
-    private Preference mTimePref;
-    private AlarmPreference mAlarmPref;
-    private RepeatPreference mRepeatPref;
-    private CheckBoxPreference mPreAlarmPref;
+    @InjectPreference("enabled") private CheckBoxPreference mEnabledPref;
+    @InjectPreference("time") private Preference mTimePref;
+    @InjectPreference("alarm") private AlarmPreference mAlarmPref;
+    @InjectPreference("setRepeat") private RepeatPreference mRepeatPref;
+    @InjectPreference("prealarm") private CheckBoxPreference mPreAlarmPref;
 
     private Alarm alarm;
     private boolean isNewAlarm;
@@ -76,43 +81,30 @@ public class AlarmDetailsActivity extends PreferenceActivity implements Preferen
     private int mMinute;
     private TimePickerDialog mTimePickerDialog;
 
-    private SharedPreferences sp;
+    @Inject private SharedPreferences sp;
 
     @Override
     protected void onCreate(Bundle icicle) {
-        setTheme(DynamicThemeHandler.getInstance().getIdForName(AlarmDetailsActivity.class.getName()));
+        RoboGuice.getInjector(this).getInstance(DynamicThemeHandler.class)
+                .setThemeFor(this, AlarmDetailsActivity.class);
         super.onCreate(icicle);
 
         if (!getResources().getBoolean(R.bool.isTablet)) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         }
 
-        // Override the default content view.
-        setContentView(R.layout.details_activity);
-
-        sp = PreferenceManager.getDefaultSharedPreferences(this);
-
         // TODO Stop using preferences for this view. Save on done, not after
         // each change.
         addPreferencesFromResource(R.xml.alarm_details);
 
-        alarms = AlarmsManager.getAlarmsManager();
-
-        EditText label = (EditText) getLayoutInflater().inflate(R.layout.details_label, null);
-        ListView list = (ListView) findViewById(android.R.id.list);
-        list.addFooterView(label);
+        mLabel = (EditText) getLayoutInflater().inflate(R.layout.details_label, null);
+        ((ListView) findViewById(android.R.id.list)).addFooterView(mLabel);
 
         // Get each preference so we can retrieve the value later.
-        mLabel = label;
-        mEnabledPref = (CheckBoxPreference) findPreference("enabled");
         // remove enable preference from screen
         getPreferenceScreen().removePreference(mEnabledPref);
-        mTimePref = findPreference("time");
-        mAlarmPref = (AlarmPreference) findPreference("alarm");
         mAlarmPref.setOnPreferenceChangeListener(this);
-        mRepeatPref = (RepeatPreference) findPreference("setRepeat");
         mRepeatPref.setOnPreferenceChangeListener(this);
-        mPreAlarmPref = (CheckBoxPreference) findPreference("prealarm");
         mPreAlarmPref.setOnPreferenceChangeListener(this);
 
         Intent intent = getIntent();
@@ -193,7 +185,7 @@ public class AlarmDetailsActivity extends PreferenceActivity implements Preferen
         try {
             alarm = alarms.getAlarm(mId);
         } catch (AlarmNotFoundException e) {
-            Logger.getDefaultLogger().d("Alarm not found");
+            logger.d("Alarm not found");
             finish();
         }
     }

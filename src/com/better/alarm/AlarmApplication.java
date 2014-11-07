@@ -18,24 +18,38 @@ package com.better.alarm;
 import java.io.File;
 import java.lang.reflect.Field;
 
-import org.acra.ACRA;
-import org.acra.ErrorReporter;
-import org.acra.ExceptionHandlerInitializer;
 import org.acra.ReportField;
 import org.acra.annotation.ReportsCrashes;
 
+import roboguice.RoboGuice;
 import android.app.Application;
 import android.content.Context;
 import android.preference.PreferenceManager;
 import android.view.ViewConfiguration;
 
-import com.better.alarm.model.AlarmsManager;
+import com.better.alarm.events.BusImpl;
+import com.better.alarm.events.IBus;
+import com.better.alarm.model.Alarms;
+import com.better.alarm.model.AlarmsScheduler;
+import com.better.alarm.model.IAlarmsScheduler;
+import com.better.alarm.model.interfaces.IAlarmsManager;
 import com.better.alarm.presenter.DynamicThemeHandler;
+import com.better.alarm.presenter.alert.AlarmAlertReceiver;
+import com.better.alarm.presenter.background.KlaxonPresenter;
+import com.better.alarm.presenter.background.ScheduledPresenter;
+import com.better.alarm.presenter.background.ToastPresenter;
+import com.better.alarm.presenter.background.VibrationPresenter;
+import com.github.androidutils.logger.FileLogWriter;
 import com.github.androidutils.logger.LogcatLogWriterWithLines;
 import com.github.androidutils.logger.Logger;
 import com.github.androidutils.logger.LoggingExceptionHandler;
 import com.github.androidutils.logger.StartupLogWriter;
 import com.github.androidutils.wakelock.WakeLockManager;
+import com.google.inject.Binder;
+import com.google.inject.Injector;
+import com.google.inject.Module;
+import com.google.inject.Scopes;
+import com.google.inject.util.Modules;
 
 // @formatter:off
 @ReportsCrashes(
@@ -54,13 +68,29 @@ import com.github.androidutils.wakelock.WakeLockManager;
                 })
 // @formatter:on
 public class AlarmApplication extends Application {
-
     @Override
     public void onCreate() {
+        RoboGuice.setUseAnnotationDatabases(false);
+
+        final WakeLockManager wakeLockManager = new WakeLockManager(this, new Logger(), false);
+
+        Injector injector = RoboGuice.getOrCreateBaseApplicationInjector(this, RoboGuice.DEFAULT_STAGE,
+                Modules.override(RoboGuice.newDefaultRoboModule(this)).with(new Module() {
+                    @Override
+                    public void configure(Binder binder) {
+                        binder.bind(Logger.class).in(Scopes.SINGLETON);
+                        binder.bind(Alarms.class).in(Scopes.SINGLETON);
+                        binder.bind(IAlarmsManager.class).to(Alarms.class).in(Scopes.SINGLETON);
+                        binder.bind(WakeLockManager.class).toInstance(wakeLockManager);
+                        binder.bind(IBus.class).to(BusImpl.class).in(Scopes.SINGLETON);
+                        binder.bind(AlarmsScheduler.class).in(Scopes.SINGLETON);
+                        binder.bind(IAlarmsScheduler.class).to(AlarmsScheduler.class).in(Scopes.SINGLETON);
+                        binder.bind(DynamicThemeHandler.class).in(Scopes.SINGLETON);
+                    }
+                }));
+
         // The following line triggers the initialization of ACRA
-        ACRA.init(this);
-        DynamicThemeHandler.init(this);
-        setTheme(DynamicThemeHandler.getInstance().getIdForName(DynamicThemeHandler.DEFAULT));
+        // ACRA.init(this);
 
         try {
             ViewConfiguration config = ViewConfiguration.get(this);
@@ -73,24 +103,34 @@ public class AlarmApplication extends Application {
             // Ignore
         }
 
-        Logger logger = Logger.getDefaultLogger();
+        // ACRA.getErrorReporter().setExceptionHandlerInitializer(new
+        // ExceptionHandlerInitializer() {
+        // @Override
+        // public void initializeExceptionHandler(ErrorReporter reporter) {
+        // reporter.putCustomData("STARTUP_LOG",
+        // StartupLogWriter.getInstance().getMessagesAsString());
+        // }
+        // });
+        PreferenceManager.setDefaultValues(this, R.xml.preferences, false);
+
+        Logger logger = injector.getInstance(Logger.class);
         logger.addLogWriter(LogcatLogWriterWithLines.getInstance());
+        logger.addLogWriter(FileLogWriter.getInstance(this, false));
         logger.addLogWriter(StartupLogWriter.getInstance());
         LoggingExceptionHandler.addLoggingExceptionHandlerToAllThreads(logger);
 
-        WakeLockManager.init(getApplicationContext(), new Logger(), true);
-        AlarmsManager.init(getApplicationContext(), logger);
-
-        ACRA.getErrorReporter().setExceptionHandlerInitializer(new ExceptionHandlerInitializer() {
-            @Override
-            public void initializeExceptionHandler(ErrorReporter reporter) {
-                reporter.putCustomData("STARTUP_LOG", StartupLogWriter.getInstance().getMessagesAsString());
-            }
-        });
-
-        PreferenceManager.setDefaultValues(this, R.xml.preferences, false);
-
         deleteLogs(logger, getApplicationContext());
+
+        injector.getInstance(DynamicThemeHandler.class).setThemeFor(this, DynamicThemeHandler.DEFAULT);
+
+        injector.getInstance(AlarmsScheduler.class).init();
+        injector.getInstance(Alarms.class).init();
+
+        injector.getInstance(ToastPresenter.class).init();
+        injector.getInstance(VibrationPresenter.class).init();
+        injector.getInstance(ScheduledPresenter.class).init();
+        injector.getInstance(KlaxonPresenter.class).init();
+        injector.getInstance(AlarmAlertReceiver.class).init();
 
         logger.d("onCreate");
         super.onCreate();

@@ -2,7 +2,9 @@ package com.better.alarm.presenter;
 
 import java.util.Calendar;
 
-import android.app.Fragment;
+import javax.inject.Inject;
+
+import roboguice.fragment.provided.RoboFragment;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -19,24 +21,27 @@ import android.widget.TextView;
 import android.widget.ViewSwitcher.ViewFactory;
 
 import com.better.alarm.R;
-import com.better.alarm.model.AlarmsManager;
+import com.better.alarm.events.AlarmSceduledEvent;
+import com.better.alarm.events.AlarmUnscheduledEvent;
+import com.better.alarm.events.IBus;
+import com.better.alarm.events.RequestScheduledUnscheduledStatus;
 import com.better.alarm.model.interfaces.Alarm;
 import com.better.alarm.model.interfaces.AlarmNotFoundException;
 import com.better.alarm.model.interfaces.IAlarmsManager;
-import com.better.alarm.model.interfaces.Intents;
 import com.github.androidutils.logger.Logger;
+import com.squareup.otto.Subscribe;
 
 /**
  * 
  * @author Yuriy
  * 
  */
-public class InfoFragment extends Fragment implements ViewFactory {
+public class InfoFragment extends RoboFragment implements ViewFactory {
 
-    private final Logger log = Logger.getDefaultLogger();
-
-    private IAlarmsManager alarms;
-    private BroadcastReceiver mAlarmsScheduledReceiver;
+    @Inject private IAlarmsManager alarms;
+    @Inject private Logger logger;
+    @Inject private IBus bus;
+    @Inject private Context context;
 
     private static final String DM12 = "E h:mm aa";
     private static final String DM24 = "E kk:mm";
@@ -45,7 +50,6 @@ public class InfoFragment extends Fragment implements ViewFactory {
     private TextSwitcher remainingTime;
 
     private Alarm alarm;
-
     private TickReceiver mTickReceiver;
 
     private final class TickReceiver extends BroadcastReceiver {
@@ -57,39 +61,24 @@ public class InfoFragment extends Fragment implements ViewFactory {
         }
     }
 
-    private class AlarmChangedReceiver extends BroadcastReceiver {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            try {
-                if (intent.getAction().equals(Intents.ACTION_ALARM_SCHEDULED)) {
-                    int id = intent.getIntExtra(Intents.EXTRA_ID, -1);
-                    alarm = alarms.getAlarm(id);
-
-                    log.d(intent.toString() + " " + alarm.toString());
-                    String format = android.text.format.DateFormat.is24HourFormat(context) ? DM24 : DM12;
-                    Calendar calendar = alarm.isSnoozed() ? alarm.getSnoozedTime() : alarm.getNextTime();
-                    String timeString = (String) DateFormat.format(format, calendar);
-                    textView.setText(timeString);
-                    remainingTime.setText(formatRemainingTimeString(alarm.getNextTime().getTimeInMillis()));
-
-                } else if (intent.getAction().equals(Intents.ACTION_ALARMS_UNSCHEDULED)) {
-                    log.d(intent.toString());
-                    textView.setText("");
-                    remainingTime.setText("");
-                    alarm = null;
-                }
-            } catch (AlarmNotFoundException e) {
-                Logger.getDefaultLogger().d("Alarm not found");
-            }
-        }
+    @Subscribe
+    public void handle(AlarmSceduledEvent event) throws AlarmNotFoundException {
+        logger.d(event);
+        alarm = alarms.getAlarm(event.id);
+        String format = android.text.format.DateFormat.is24HourFormat(context) ? DM24 : DM12;
+        Calendar calendar = alarm.isSnoozed() ? alarm.getSnoozedTime() : alarm.getNextTime();
+        String timeString = (String) DateFormat.format(format, calendar);
+        textView.setText(timeString);
+        remainingTime.setText(formatRemainingTimeString(alarm.getNextTime().getTimeInMillis()));
     }
 
-    @Override
-    public void onActivityCreated(Bundle savedInstanceState) {
-        super.onActivityCreated(savedInstanceState);
-        alarms = AlarmsManager.getAlarmsManager();
-        mAlarmsScheduledReceiver = new AlarmChangedReceiver();
-        mTickReceiver = new TickReceiver();
+    @Subscribe
+    public void handle(AlarmUnscheduledEvent event) {
+        logger.d(event);
+        textView.setText("");
+        remainingTime.setText("");
+        alarm = null;
+
     }
 
     @Override
@@ -114,19 +103,18 @@ public class InfoFragment extends Fragment implements ViewFactory {
     @Override
     public void onResume() {
         super.onResume();
-        log.d("onResume");
-        IntentFilter intentFilter = new IntentFilter(Intents.ACTION_ALARM_SCHEDULED);
-        intentFilter.addAction(Intents.ACTION_ALARMS_UNSCHEDULED);
-        getActivity().registerReceiver(mAlarmsScheduledReceiver, intentFilter);
-        getActivity().sendBroadcast(new Intent(Intents.REQUEST_LAST_SCHEDULED_ALARM));
+        logger.d("onResume");
+        bus.register(this);
+        bus.post(new RequestScheduledUnscheduledStatus());
+        mTickReceiver = new TickReceiver();
         getActivity().registerReceiver(mTickReceiver, new IntentFilter(Intent.ACTION_TIME_TICK));
     }
 
     @Override
     public void onPause() {
         super.onPause();
-        log.d("onPause");
-        getActivity().unregisterReceiver(mAlarmsScheduledReceiver);
+        logger.d("onPause");
+        bus.unregister(this);
         getActivity().unregisterReceiver(mTickReceiver);
     }
 

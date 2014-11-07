@@ -64,19 +64,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
-<!-- Forwards intents to the AlarmAlert or AlarmAlertFullScreen -->
-        <receiver
-            android:name=".presenter.alert.AlarmAlertReceiver"
-            android:exported="false" >
-            <intent-filter>
-                <action android:name="com.better.alarm.ALARM_ALERT" />
-                <action android:name="com.better.alarm.ALARM_PREALARM_ACTION" />
-                <action android:name="com.better.alarm.ALARM_SNOOZE" />
-                <action android:name="com.better.alarm.ACTION_CANCEL_SNOOZE" />
-                <action android:name="com.better.alarm.ALARM_DISMISS" />
-                <action android:name="com.better.alarm.ACTION_SOUND_EXPIRED" />
-            </intent-filter>
-        </receiver>
 
         <!-- Alarm alert with snooze and dismiss buttons -->
         <activity
@@ -104,68 +91,6 @@
             android:launchMode="singleInstance"
             android:theme="@android:style/Theme.Holo.Dialog.NoActionBar"
             android:taskAffinity="" />
-
-        <!-- KlaxonPresenter plays sound -->
-        <receiver
-            android:name=".presenter.background.KlaxonService$Receiver"
-            android:exported="false" >
-            <intent-filter>
-                <action android:name="com.better.alarm.ALARM_ALERT" />
-                <action android:name="com.better.alarm.ALARM_PREALARM_ACTION" />
-                <action android:name="com.better.alarm.ALARM_SNOOZE" />
-                <action android:name="com.better.alarm.ALARM_DISMISS" />
-                <action android:name="com.better.alarm.ACTION_SOUND_EXPIRED" />
-                <action android:name="com.better.alarm.ACTION_START_PREALARM_SAMPLE" />
-                <action android:name="com.better.alarm.ACTION_STOP_PREALARM_SAMPLE" />
-                <action android:name="com.better.alarm.ACTION_START_ALARM_SAMPLE" />
-                <action android:name="com.better.alarm.ACTION_STOP_ALARM_SAMPLE" />
-                <action android:name="com.better.alarm.ACTION_MUTE" />
-                <action android:name="com.better.alarm.ACTION_DEMUTE" />
-            </intent-filter>
-        </receiver>
-        <service
-            android:name=".presenter.background.KlaxonService"
-            android:description="@string/alarm_klaxon_service_desc"
-            android:exported="false" >
-        </service>
-
-        <!-- VibrationPresenter vibrates -->
-        <receiver
-            android:name=".presenter.background.VibrationService$Receiver"
-            android:exported="false" >
-            <intent-filter>
-                <action android:name="com.better.alarm.ALARM_ALERT" />
-                <action android:name="com.better.alarm.ALARM_SNOOZE" />
-                <action android:name="com.better.alarm.ALARM_DISMISS" />
-                <action android:name="com.better.alarm.ACTION_SOUND_EXPIRED" />
-                <action android:name="com.better.alarm.ACTION_MUTE" />
-                <action android:name="com.better.alarm.ACTION_DEMUTE" />
-            </intent-filter>
-        </receiver>
-        <service
-            android:name=".presenter.background.VibrationService"
-            android:description="@string/alarm_klaxon_service_desc"
-            android:exported="false" >
-        </service>
-
-        <!-- Reacts on Alarms being set/unset and changes notification bar and lockscreen -->
-        <receiver
-            android:name=".presenter.background.ScheduledReceiver" 
-            android:exported="false" >
-            <intent-filter>
-                <action android:name="com.better.alarm.model.Intents.ACTION_ALARMS_UNSCHEDULED" />
-                <action android:name="com.better.alarm.model.Intents.ACTION_ALARM_SCHEDULED" />
-            </intent-filter>
-        </receiver>
-
-        <!-- Reacts on Alarms set and displays a toast -->
-        <receiver
-            android:name=".presenter.background.ToastPresenter"
-            android:exported="false" >
-            <intent-filter>
-                <action android:name="com.better.alarm.model.Intents.ACTION_ALARM_SET" />
-            </intent-filter>
-        </receiver>
 
         <!-- Model -->
         <receiver

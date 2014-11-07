@@ -26,23 +26,25 @@ import java.util.PriorityQueue;
 
 import android.app.AlarmManager;
 import android.app.PendingIntent;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 
-import com.better.alarm.model.interfaces.Intents;
+import com.better.alarm.IComponent;
+import com.better.alarm.events.AlarmSceduledEvent;
+import com.better.alarm.events.AlarmUnscheduledEvent;
+import com.better.alarm.events.IBus;
+import com.better.alarm.events.RequestScheduledUnscheduledStatus;
 import com.github.androidutils.logger.Logger;
+import com.google.inject.Inject;
+import com.squareup.otto.Subscribe;
 
-public class AlarmsScheduler implements IAlarmsScheduler {
+public class AlarmsScheduler implements IAlarmsScheduler, IComponent {
     static final String ACTION_FIRED = "com.better.alarm.ACTION_FIRED";
     static final String EXTRA_ID = "intent.extra.alarm";
     static final String EXTRA_TYPE = "intent.extra.type";
 
     private interface ISetAlarmStrategy {
-
         void setRTCAlarm(ScheduledAlarm alarm, PendingIntent sender);
-
     }
 
     private class ScheduledAlarm implements Comparable<ScheduledAlarm> {
@@ -86,27 +88,23 @@ public class AlarmsScheduler implements IAlarmsScheduler {
         }
     }
 
-    private final Context mContext;
-
     private final PriorityQueue<ScheduledAlarm> queue;
+    private ISetAlarmStrategy setAlarmStrategy;
 
-    private final Logger log;
-    private final ISetAlarmStrategy setAlarmStrategy;
-    private final AlarmManager am;
+    @Inject private AlarmManager am;
+    @Inject private Context mContext;
+    @Inject private Logger log;
+    @Inject private IBus bus;
 
-    public AlarmsScheduler(Context context, Logger logger) {
-        mContext = context;
-        am = (AlarmManager) mContext.getSystemService(Context.ALARM_SERVICE);
+    public AlarmsScheduler() {
         queue = new PriorityQueue<ScheduledAlarm>();
-        this.log = logger;
-        context.registerReceiver(new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                notifyListeners();
-            }
-        }, new IntentFilter(Intents.REQUEST_LAST_SCHEDULED_ALARM));
+    }
+
+    @Override
+    public void init() {
         setAlarmStrategy = initSetStrategyForVersion();
         log.d("Using " + setAlarmStrategy);
+        bus.register(this);
     }
 
     private ISetAlarmStrategy initSetStrategyForVersion() {
@@ -122,6 +120,11 @@ public class AlarmsScheduler implements IAlarmsScheduler {
                 return new IceCreamSetter();
             }
         } else return new IceCreamSetter();
+    }
+
+    @Subscribe
+    public void handle(RequestScheduledUnscheduledStatus event) {
+        notifyListeners();
     }
 
     @Override
@@ -198,24 +201,30 @@ public class AlarmsScheduler implements IAlarmsScheduler {
      * rest.
      */
     private void notifyListeners() {
-        Intent intent = new Intent();
+
         if (queue.isEmpty()) {
-            intent.setAction(Intents.ACTION_ALARMS_UNSCHEDULED);
+            unscheduled();
         } else if (queue.peek().type != CalendarType.AUTOSILENCE) {
-            ScheduledAlarm scheduledAlarm = queue.peek();
-            intent.setAction(Intents.ACTION_ALARM_SCHEDULED);
-            intent.putExtra(Intents.EXTRA_ID, scheduledAlarm.id);
+            scheduled(queue.peek());
         } else {
             // now this means that alarm in the closest future is AUTOSILENCE
             ScheduledAlarm scheduledAlarm = findNextNormalAlarm();
             if (scheduledAlarm != null) {
-                intent.setAction(Intents.ACTION_ALARM_SCHEDULED);
-                intent.putExtra(Intents.EXTRA_ID, scheduledAlarm.id);
+                scheduled(scheduledAlarm);
             } else {
-                intent.setAction(Intents.ACTION_ALARMS_UNSCHEDULED);
+                unscheduled();
             }
         }
-        mContext.sendBroadcast(intent);
+    }
+
+    private void scheduled(ScheduledAlarm scheduledAlarm) {
+        AlarmSceduledEvent alarmSceduledEvent = new AlarmSceduledEvent();
+        alarmSceduledEvent.id = scheduledAlarm.id;
+        bus.post(alarmSceduledEvent);
+    }
+
+    private void unscheduled() {
+        bus.post(new AlarmUnscheduledEvent());
     }
 
     private ScheduledAlarm findNextNormalAlarm() {

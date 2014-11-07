@@ -1,10 +1,11 @@
 package com.better.alarm.presenter;
 
-import android.app.Activity;
+import javax.inject.Inject;
+
+import roboguice.activity.RoboActivity;
 import android.content.Intent;
 import android.os.Bundle;
 
-import com.better.alarm.model.AlarmsManager;
 import com.better.alarm.model.interfaces.Alarm;
 import com.better.alarm.model.interfaces.AlarmNotFoundException;
 import com.better.alarm.model.interfaces.IAlarmsManager;
@@ -13,36 +14,33 @@ import com.better.alarm.presenter.TimePickerDialogFragment.AlarmTimePickerDialog
 import com.better.alarm.presenter.TimePickerDialogFragment.OnAlarmTimePickerCanceledListener;
 import com.github.androidutils.logger.Logger;
 
-public class TransparentActivity extends Activity implements AlarmTimePickerDialogHandler,
+public class TransparentActivity extends RoboActivity implements AlarmTimePickerDialogHandler,
         OnAlarmTimePickerCanceledListener {
-
-    private IAlarmsManager alarmsManager;
+    @Inject private IAlarmsManager alarmsManager;
     private Alarm alarm;
-    Logger log;
+    @Inject Logger logger;
 
     @Override
     protected void onCreate(Bundle icicle) {
         super.onCreate(icicle);
-        alarmsManager = AlarmsManager.getAlarmsManager();
-        log = Logger.getDefaultLogger();
         Intent intent = getIntent();
-        log.d("Intent in TransparentActivity was received");
+        logger.d("Intent in TransparentActivity was received");
         int id = intent.getIntExtra(Intents.EXTRA_ID, -1);
         try {
             alarm = alarmsManager.getAlarm(id);
-            log.d("Alarm, that has to be rescheduled:" + alarm.getNextTime());
+            logger.d("Alarm, that has to be rescheduled:" + alarm.getNextTime());
         } catch (AlarmNotFoundException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
         }
         TimePickerDialogFragment.showTimePicker(getFragmentManager());
-        log.d("Do you see time picker?");
+        logger.d("Do you see time picker?");
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-        Logger.getDefaultLogger().d("TransparentActivity.onDestroy()");
+        logger.d("TransparentActivity.onDestroy()");
         // No longer care about the alarm being killed.
 
     }

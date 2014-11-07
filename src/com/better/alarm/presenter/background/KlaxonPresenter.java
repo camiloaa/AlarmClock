@@ -17,10 +17,9 @@
 
 package com.better.alarm.presenter.background;
 
-import android.app.Service;
-import android.content.BroadcastReceiver;
+import javax.inject.Inject;
+
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.content.res.AssetFileDescriptor;
@@ -31,48 +30,53 @@ import android.media.MediaPlayer.OnErrorListener;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.CountDownTimer;
-import android.os.IBinder;
 import android.os.PowerManager;
-import android.os.PowerManager.WakeLock;
-import android.preference.PreferenceManager;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
 
+import com.better.alarm.Component;
 import com.better.alarm.R;
-import com.better.alarm.model.AlarmsManager;
+import com.better.alarm.events.AlarmFiredEvent;
+import com.better.alarm.events.DemuteEvent;
+import com.better.alarm.events.DismissedEvent;
+import com.better.alarm.events.IBus;
+import com.better.alarm.events.MuteEvent;
+import com.better.alarm.events.PrealarmFiredEvent;
+import com.better.alarm.events.SnoozedEvent;
+import com.better.alarm.events.SoundExpiredEvent;
+import com.better.alarm.events.StartAlarmSampleEvent;
+import com.better.alarm.events.StartPrealarmSampleEvent;
+import com.better.alarm.events.StopAlarmSampleEvent;
+import com.better.alarm.events.StopPrealarmSampleEvent;
 import com.better.alarm.model.interfaces.Alarm;
-import com.better.alarm.model.interfaces.Intents;
+import com.better.alarm.model.interfaces.AlarmNotFoundException;
+import com.better.alarm.model.interfaces.IAlarmsManager;
 import com.better.alarm.presenter.SettingsActivity;
+import com.better.alarm.view.VolumePreference;
 import com.github.androidutils.logger.Logger;
 import com.github.androidutils.wakelock.WakeLockManager;
+import com.squareup.otto.Subscribe;
 
 /**
  * Manages alarms and vibe. Runs as a service so that it can continue to play if
  * another activity overrides the AlarmAlert dialog.
  */
-public class KlaxonService extends Service {
+public class KlaxonPresenter extends Component {
+    @Inject private TelephonyManager mTelephonyManager;
+    @Inject private Logger log;
+    @Inject private Volume volume;
+    @Inject private PowerManager pm;
+    @Inject private SharedPreferences sp;
+    @Inject private WakeLockManager wakelocks;
+    @Inject private IAlarmsManager alarms;
+    @Inject private Context context;
+    @Inject private AudioManager audioManager;
+    @Inject private IBus bus;
+
     private volatile IMediaPlayer mMediaPlayer;
-    private TelephonyManager mTelephonyManager;
-    private Logger log;
-    private Volume volume;
-    private PowerManager pm;
-    private WakeLock wakeLock;
-    private SharedPreferences sp;
-
-    private Alarm alarm;
+    // TODO private WakeLock wakeLock;
+    private Alarm lastAlarm;
     private boolean lastInCallState;
-
-    /**
-     * Dispatches intents to the KlaxonService
-     */
-    public static class Receiver extends BroadcastReceiver {
-        @Override
-        public void onReceive(final Context context, final Intent intent) {
-            intent.setClass(context, KlaxonService.class);
-            WakeLockManager.getWakeLockManager().acquirePartialWakeLock(intent, "ForKlaxonService");
-            context.startService(intent);
-        }
-    }
 
     private final PhoneStateListener phoneStateListenerImpl = new PhoneStateListener() {
         @Override
@@ -85,8 +89,8 @@ public class KlaxonService extends Service {
                     volume.mute();
                 } else {
                     log.d("Call has ended. fadeInFast.");
-                    if (alarm != null && !alarm.isSilent()) {
-                        initializePlayer(getAlertOrDefault(alarm));
+                    if (lastAlarm != null && !lastAlarm.isSilent()) {
+                        initializePlayer(getAlertOrDefault(lastAlarm));
                         volume.fadeInFast();
                     }
                 }
@@ -107,7 +111,7 @@ public class KlaxonService extends Service {
         private static final float[] ALARM_VOLUMES = { 0f, 0.01f, 0.04f, 0.09f, 0.16f, 0.25f, 0.36f, 0.49f, 0.64f,
                 0.81f, 1.0f };
 
-        private final SharedPreferences sp;
+        @Inject private SharedPreferences sp;
 
         private final class FadeInTimer extends CountDownTimer {
             private final long fadeInTime;
@@ -143,16 +147,11 @@ public class KlaxonService extends Service {
 
         private Type type = Type.NORMAL;
         private IMediaPlayer player;
-        private final Logger log;
+        @Inject private Logger log;
         private int preAlarmVolume = 0;
         private int alarmVolume = 4;
 
         private CountDownTimer timer;
-
-        public Volume(final Logger log, SharedPreferences sp) {
-            this.log = log;
-            this.sp = sp;
-        }
 
         public void setMode(Type type) {
             this.type = type;
@@ -182,8 +181,8 @@ public class KlaxonService extends Service {
 
         @Override
         public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-            if (key.equals(Intents.KEY_PREALARM_VOLUME)) {
-                preAlarmVolume = sharedPreferences.getInt(key, Intents.DEFAULT_PREALARM_VOLUME);
+            if (key.equals(VolumePreference.KEY_PREALARM_VOLUME)) {
+                preAlarmVolume = sharedPreferences.getInt(key, VolumePreference.DEFAULT_PREALARM_VOLUME);
                 if (preAlarmVolume > ALARM_VOLUMES.length) {
                     preAlarmVolume = ALARM_VOLUMES.length;
                     log.w("Truncated targetVolume!");
@@ -192,8 +191,8 @@ public class KlaxonService extends Service {
                     player.setVolume(ALARM_VOLUMES[preAlarmVolume], ALARM_VOLUMES[preAlarmVolume]);
                 }
 
-            } else if (key.equals(Intents.KEY_ALARM_VOLUME)) {
-                alarmVolume = sharedPreferences.getInt(key, Intents.DEFAULT_ALARM_VOLUME);
+            } else if (key.equals(VolumePreference.KEY_ALARM_VOLUME)) {
+                alarmVolume = sharedPreferences.getInt(key, VolumePreference.DEFAULT_ALARM_VOLUME);
                 if (alarmVolume > ALARM_VOLUMES.length) {
                     alarmVolume = ALARM_VOLUMES.length;
                     log.w("Truncated targetVolume!");
@@ -237,125 +236,104 @@ public class KlaxonService extends Service {
     }
 
     @Override
-    public void onCreate() {
+    public void init() {
         mMediaPlayer = new NullMediaPlayer();
-        log = Logger.getDefaultLogger();
-        pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "KlaxonService");
-        wakeLock.acquire();
-        // Listen for incoming calls to kill the alarm.
-        mTelephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
-        sp = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-        volume = new Volume(log, sp);
+        // wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+        // "KlaxonPresenter");
+        // wakeLock.acquire();
+        // Listen for incoming calls to kill the lastAlarm.
         volume.setPlayer(mMediaPlayer);
         lastInCallState = mTelephonyManager.getCallState() != TelephonyManager.CALL_STATE_IDLE;
         mTelephonyManager.listen(phoneStateListenerImpl, PhoneStateListener.LISTEN_CALL_STATE);
         sp.registerOnSharedPreferenceChangeListener(volume);
-        volume.onSharedPreferenceChanged(sp, Intents.KEY_PREALARM_VOLUME);
-        volume.onSharedPreferenceChanged(sp, Intents.KEY_ALARM_VOLUME);
+        volume.onSharedPreferenceChanged(sp, VolumePreference.KEY_PREALARM_VOLUME);
+        volume.onSharedPreferenceChanged(sp, VolumePreference.KEY_ALARM_VOLUME);
+        bus.register(this);
     }
 
-    @Override
-    public void onDestroy() {
-        stop();
-        // Stop listening for incoming calls.
-        mTelephonyManager.listen(phoneStateListenerImpl, PhoneStateListener.LISTEN_NONE);
-        PreferenceManager.getDefaultSharedPreferences(getApplicationContext())
-                .unregisterOnSharedPreferenceChangeListener(volume);
-        log.d("Service destroyed");
-        wakeLock.release();
+    @Subscribe
+    public void handle(DismissedEvent event) {
+        stopAndCleanup();// return START_NOT_STICKY;
     }
 
-    @Override
-    public IBinder onBind(Intent intent) {
-        return null;
+    @Subscribe
+    public void handle(SnoozedEvent event) {
+        stopAndCleanup();// return START_NOT_STICKY;
     }
 
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null) {
-            WakeLockManager.getWakeLockManager().releasePartialWakeLock(intent);
-        }
-        try {
-            String action = intent.getAction();
-            if (action.equals(Intents.ALARM_ALERT_ACTION)) {
-                alarm = AlarmsManager.getAlarmsManager().getAlarm(intent.getIntExtra(Intents.EXTRA_ID, -1));
-                onAlarm(alarm);
-                return START_STICKY;
-
-            } else if (action.equals(Intents.ALARM_PREALARM_ACTION)) {
-                alarm = AlarmsManager.getAlarmsManager().getAlarm(intent.getIntExtra(Intents.EXTRA_ID, -1));
-                onPreAlarm(alarm);
-                return START_STICKY;
-
-            } else if (action.equals(Intents.ALARM_DISMISS_ACTION)) {
-                stopAndCleanup();
-                return START_NOT_STICKY;
-
-            } else if (action.equals(Intents.ALARM_SNOOZE_ACTION)) {
-                stopAndCleanup();
-                return START_NOT_STICKY;
-
-            } else if (action.equals(Intents.ACTION_SOUND_EXPIRED)) {
-                stopAndCleanup();
-                return START_NOT_STICKY;
-
-            } else if (action.equals(Intents.ACTION_START_PREALARM_SAMPLE)) {
-                onStartAlarmSample(Volume.Type.PREALARM);
-                return START_STICKY;
-
-            } else if (action.equals(Intents.ACTION_STOP_PREALARM_SAMPLE)) {
-                stopAndCleanup();
-                return START_NOT_STICKY;
-
-            } else if (action.equals(Intents.ACTION_START_ALARM_SAMPLE)) {
-                onStartAlarmSample(Volume.Type.NORMAL);
-                return START_STICKY;
-
-            } else if (action.equals(Intents.ACTION_STOP_ALARM_SAMPLE)) {
-                stopAndCleanup();
-                return START_NOT_STICKY;
-
-            } else if (action.equals(Intents.ACTION_MUTE)) {
-                volume.mute();
-                return START_STICKY;
-
-            } else if (action.equals(Intents.ACTION_DEMUTE)) {
-                volume.fadeInFast();
-                return START_STICKY;
-
-            } else if (action.equals(Intents.ACTION_STOP_ALARM_SAMPLE)) {
-                stopAndCleanup();
-                return START_NOT_STICKY;
-
-            } else {
-                log.e("unexpected intent " + intent.getAction());
-                stopAndCleanup();
-                return START_NOT_STICKY;
-            }
-        } catch (Exception e) {
-            log.e("Something went wrong" + e.getMessage());
-            stopAndCleanup();
-            return START_NOT_STICKY;
-        }
+    @Subscribe
+    public void handle(SoundExpiredEvent event) {
+        stopAndCleanup();// return START_NOT_STICKY;
     }
 
-    private void onAlarm(Alarm alarm) throws Exception {
+    @Subscribe
+    public void handle(MuteEvent event) {
+        volume.mute();// return START_STICKY;
+    }
+
+    @Subscribe
+    public void handle(DemuteEvent event) {
+        volume.fadeInFast();// return START_STICKY;
+    }
+
+    //
+    // } else if (action.equals(Intents.ACTION_STOP_PREALARM_SAMPLE)) {
+    // stopAndCleanup();
+    // return START_NOT_STICKY;
+    //
+    // } else if (action.equals(Intents.ACTION_START_ALARM_SAMPLE)) {
+    // onStartAlarmSample(Volume.Type.NORMAL);
+    // return START_STICKY;
+    //
+    // } else if (action.equals(Intents.ACTION_STOP_ALARM_SAMPLE)) {
+    // stopAndCleanup();
+    // return START_NOT_STICKY;
+    //
+    //
+    // } else if (action.equals(Intents.ACTION_STOP_ALARM_SAMPLE)) {
+    // stopAndCleanup();
+    // return START_NOT_STICKY;
+
+    @Subscribe
+    public void handle(AlarmFiredEvent alarmFiredEvent) throws AlarmNotFoundException {
         volume.cancelFadeIn();
         volume.setMode(Volume.Type.NORMAL);
+        Alarm alarm = alarms.getAlarm(alarmFiredEvent.id);
         if (!alarm.isSilent()) {
             initializePlayer(getAlertOrDefault(alarm));
             volume.fadeInAsSetInSettings();
         }
     }
 
-    private void onPreAlarm(Alarm alarm) throws Exception {
+    @Subscribe
+    public void handle(PrealarmFiredEvent prealarmFiredEvent) throws AlarmNotFoundException {
         volume.cancelFadeIn();
         volume.setMode(Volume.Type.PREALARM);
+        Alarm alarm = alarms.getAlarm(prealarmFiredEvent.id);
         if (!alarm.isSilent()) {
             initializePlayer(getAlertOrDefault(alarm));
             volume.fadeInAsSetInSettings();
         }
+    }
+
+    @Subscribe
+    public void handle(StartPrealarmSampleEvent prealarmFiredEvent) {
+        onStartAlarmSample(Volume.Type.PREALARM);
+    }
+
+    @Subscribe
+    public void handle(StartAlarmSampleEvent prealarmFiredEvent) {
+        onStartAlarmSample(Volume.Type.NORMAL);
+    }
+
+    @Subscribe
+    public void handle(StopAlarmSampleEvent prealarmFiredEvent) {
+        stopAndCleanup();
+    }
+
+    @Subscribe
+    public void handle(StopPrealarmSampleEvent prealarmFiredEvent) {
+        stopAndCleanup();
     }
 
     private void onStartAlarmSample(Volume.Type type) {
@@ -366,6 +344,30 @@ public class KlaxonService extends Service {
             initializePlayer(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM));
         }
         volume.apply();
+    }
+
+    private Uri getAlertOrDefault(Alarm alarm) {
+        Uri alert = alarm.getAlert();
+        // Fall back on the default lastAlarm if the database does not have an
+        // lastAlarm stored.
+        if (alert == null) {
+            alert = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+            log.d("Using default lastAlarm: " + alert.toString());
+        }
+        return alert;
+    }
+
+    // Do the common stuff when starting the lastAlarm.
+    private void startAlarm(IMediaPlayer player) throws java.io.IOException, IllegalArgumentException,
+            IllegalStateException {
+        // do not play alarms if stream targetVolume is 0
+        // (typically because ringer mode is silent).
+        if (audioManager.getStreamVolume(AudioManager.STREAM_ALARM) != 0) {
+            player.setAudioStreamType(AudioManager.STREAM_ALARM);
+            player.setLooping(true);
+            player.prepare();
+            player.start();
+        }
     }
 
     /**
@@ -395,13 +397,13 @@ public class KlaxonService extends Service {
         volume.setPlayer(mMediaPlayer);
         volume.mute();
         try {
-            // Check if we are in a call. If we are, use the in-call alarm
+            // Check if we are in a call. If we are, use the in-call lastAlarm
             // resource at a low targetVolume to not disrupt the call.
             if (mTelephonyManager.getCallState() != TelephonyManager.CALL_STATE_IDLE) {
-                log.d("Using the in-call alarm");
-                setDataSourceFromResource(getResources(), mMediaPlayer, R.raw.in_call_alarm);
+                log.d("Using the in-call lastAlarm");
+                setDataSourceFromResource(context.getResources(), mMediaPlayer, R.raw.in_call_alarm);
             } else {
-                mMediaPlayer.setDataSource(this, alert);
+                mMediaPlayer.setDataSource(context, alert);
             }
             startAlarm(mMediaPlayer);
         } catch (Exception ex) {
@@ -411,37 +413,12 @@ public class KlaxonService extends Service {
             try {
                 // Must reset the media player to clear the error state.
                 mMediaPlayer.reset();
-                setDataSourceFromResource(getResources(), mMediaPlayer, R.raw.fallbackring);
+                setDataSourceFromResource(context.getResources(), mMediaPlayer, R.raw.fallbackring);
                 startAlarm(mMediaPlayer);
             } catch (Exception ex2) {
                 // At this point we just don't play anything.
                 log.e("Failed to play fallback ringtone", ex2);
             }
-        }
-    }
-
-    private Uri getAlertOrDefault(Alarm alarm) {
-        Uri alert = alarm.getAlert();
-        // Fall back on the default alarm if the database does not have an
-        // alarm stored.
-        if (alert == null) {
-            alert = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
-            log.d("Using default alarm: " + alert.toString());
-        }
-        return alert;
-    }
-
-    // Do the common stuff when starting the alarm.
-    private void startAlarm(IMediaPlayer player) throws java.io.IOException, IllegalArgumentException,
-            IllegalStateException {
-        final AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        // do not play alarms if stream targetVolume is 0
-        // (typically because ringer mode is silent).
-        if (audioManager.getStreamVolume(AudioManager.STREAM_ALARM) != 0) {
-            player.setAudioStreamType(AudioManager.STREAM_ALARM);
-            player.setLooping(true);
-            player.prepare();
-            player.start();
         }
     }
 
@@ -455,7 +432,7 @@ public class KlaxonService extends Service {
     }
 
     /**
-     * Stops alarm audio
+     * Stops lastAlarm audio
      */
     private void stop() {
         log.d("stopping media player");
@@ -470,11 +447,18 @@ public class KlaxonService extends Service {
         } finally {
             nullifyMediaPlayer();
         }
+
+        // Stop listening for incoming calls.
+        // TODO! this is not how it should be done!=))
+        // mTelephonyManager.listen(phoneStateListenerImpl,
+        // PhoneStateListener.LISTEN_NONE);
+        // sp.unregisterOnSharedPreferenceChangeListener(volume);
+        // wakeLock.release();
     }
 
     private void stopAndCleanup() {
         volume.cancelFadeIn();
-        stopSelf();
+        stop();
     }
 
     private void nullifyMediaPlayer() {

@@ -3,21 +3,21 @@ package com.better.alarm.presenter;
 import java.util.HashMap;
 import java.util.Map;
 
-import android.content.Context;
+import android.app.Activity;
+import android.content.ContextWrapper;
 import android.content.SharedPreferences;
-import android.preference.PreferenceManager;
 
 import com.better.alarm.R;
 import com.better.alarm.presenter.alert.AlarmAlert;
 import com.better.alarm.presenter.alert.AlarmAlertFullScreen;
+import com.google.inject.Inject;
 
 public class DynamicThemeHandler {
     public static final String KEY_THEME = "theme";
     public static final String DEFAULT = "default";
 
-    private static DynamicThemeHandler sInstance;
     private final Map<String, Map<String, Integer>> themes;
-    private final SharedPreferences sp;
+    @Inject private SharedPreferences sp;
 
     private class HashMapWithDefault extends HashMap<String, Integer> {
         private static final long serialVersionUID = 6169875120194964563L;
@@ -42,17 +42,7 @@ public class DynamicThemeHandler {
         return themeForName;
     }
 
-    public static void init(Context context) {
-        sInstance = new DynamicThemeHandler(context);
-    }
-
-    public static DynamicThemeHandler getInstance() {
-        return sInstance;
-    }
-
-    private DynamicThemeHandler(Context context) {
-        sp = PreferenceManager.getDefaultSharedPreferences(context);
-
+    public DynamicThemeHandler() {
         Map<String, Integer> darkThemes = new HashMapWithDefault(R.style.DefaultDarkTheme);
         darkThemes.put(AlarmAlert.class.getName(), R.style.AlarmAlertDarkTheme);
         darkThemes.put(AlarmAlertFullScreen.class.getName(), R.style.AlarmAlertFullScreenDarkTheme);
@@ -76,5 +66,13 @@ public class DynamicThemeHandler {
         themes.put("Light", lightThemes);
         themes.put("Dark", darkThemes);
         themes.put("Green", greenThemes);
+    }
+
+    public void setThemeFor(ContextWrapper context, Class<? extends Activity> clazz) {
+        setThemeFor(context, clazz.getName());
+    }
+
+    public void setThemeFor(ContextWrapper context, String name) {
+        context.setTheme(getIdForName(name));
     }
 }

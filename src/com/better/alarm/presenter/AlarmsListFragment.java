@@ -4,13 +4,12 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
+import javax.inject.Inject;
+
+import roboguice.fragment.provided.RoboListFragment;
 import android.app.AlertDialog;
-import android.app.ListFragment;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.os.Bundle;
 import android.text.format.DateFormat;
 import android.view.ContextMenu;
@@ -29,13 +28,14 @@ import android.widget.ListView;
 import android.widget.TextView;
 
 import com.better.alarm.R;
-import com.better.alarm.model.AlarmsManager;
+import com.better.alarm.events.AlarmListChanged;
+import com.better.alarm.events.IBus;
 import com.better.alarm.model.DaysOfWeek;
 import com.better.alarm.model.interfaces.Alarm;
 import com.better.alarm.model.interfaces.IAlarmsManager;
-import com.better.alarm.model.interfaces.Intents;
 import com.better.alarm.view.DigitalClock;
 import com.github.androidutils.logger.Logger;
+import com.squareup.otto.Subscribe;
 
 /**
  * Shows a list of alarms. To react on user interaction, requires a strategy. An
@@ -45,7 +45,7 @@ import com.github.androidutils.logger.Logger;
  * @author Yuriy
  * 
  */
-public class AlarmsListFragment extends ListFragment {
+public class AlarmsListFragment extends RoboListFragment {
     public interface ShowDetailsStrategy {
         public void showDetails(Alarm alarm);
     }
@@ -53,8 +53,7 @@ public class AlarmsListFragment extends ListFragment {
     private ShowDetailsStrategy showDetailsStrategy;
 
     private final int mCurCheckPosition = 0;
-
-    private final Logger log = Logger.getDefaultLogger();
+    @Inject private Logger log;
 
     public class AlarmListAdapter extends ArrayAdapter<Alarm> {
         private final Context context;
@@ -149,16 +148,13 @@ public class AlarmsListFragment extends ListFragment {
     public static final boolean DEBUG = false;
     public final static String M12 = "h:mm aa";
     public final static String M24 = "kk:mm";
-    private IAlarmsManager alarms;
+    @Inject private IAlarmsManager alarms;
+    @Inject IBus bus;
     private AlarmListAdapter mAdapter;
-    private BroadcastReceiver mAlarmsChangedReceiver;
 
-    private class AlarmChangedReceiver extends BroadcastReceiver {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            log.d(intent.toString());
-            updateAlarmsList();
-        }
+    @Subscribe
+    public void handle(AlarmListChanged event) {
+        updateAlarmsList();
     }
 
     @Override
@@ -206,8 +202,6 @@ public class AlarmsListFragment extends ListFragment {
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
 
-        alarms = AlarmsManager.getAlarmsManager();
-
         setListAdapter(new AlarmListAdapter(getActivity(), R.layout.list_row, R.string.alarm_list_title,
                 new ArrayList<Alarm>()));
 
@@ -219,8 +213,6 @@ public class AlarmsListFragment extends ListFragment {
         setHasOptionsMenu(true);
 
         getListView().setChoiceMode(AbsListView.CHOICE_MODE_SINGLE);
-
-        mAlarmsChangedReceiver = new AlarmChangedReceiver();
     }
 
     @Override
@@ -239,14 +231,14 @@ public class AlarmsListFragment extends ListFragment {
     @Override
     public void onResume() {
         super.onResume();
-        getActivity().registerReceiver(mAlarmsChangedReceiver, new IntentFilter(Intents.ACTION_ALARM_CHANGED));
+        bus.register(this);
         updateAlarmsList();
     }
 
     @Override
     public void onPause() {
         super.onPause();
-        getActivity().unregisterReceiver(mAlarmsChangedReceiver);
+        bus.unregister(this);
     }
 
     @Override

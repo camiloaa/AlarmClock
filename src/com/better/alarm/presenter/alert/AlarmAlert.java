@@ -17,6 +17,8 @@
 
 package com.better.alarm.presenter.alert;
 
+import javax.inject.Inject;
+
 import android.app.KeyguardManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -40,6 +42,7 @@ public class AlarmAlert extends AlarmAlertFullScreen {
     private int mKeyguardRetryCount;
     private final int MAX_KEYGUARD_CHECKS = 5;
 
+    @Inject private Logger logger;
     private final Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
@@ -95,7 +98,7 @@ public class AlarmAlert extends AlarmAlertFullScreen {
 
     private boolean checkRetryCount() {
         if (mKeyguardRetryCount++ >= MAX_KEYGUARD_CHECKS) {
-            Logger.getDefaultLogger().e("Tried to read keyguard status too many times, bailing...");
+            logger.e("Tried to read keyguard status too many times, bailing...");
             return false;
         }
         return true;

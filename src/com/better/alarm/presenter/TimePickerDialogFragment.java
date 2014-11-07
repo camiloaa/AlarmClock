@@ -16,6 +16,10 @@
 
 package com.better.alarm.presenter;
 
+import javax.inject.Inject;
+
+import roboguice.RoboGuice;
+import roboguice.fragment.provided.RoboDialogFragment;
 import android.app.Activity;
 import android.app.DialogFragment;
 import android.app.Fragment;
@@ -35,10 +39,10 @@ import com.github.androidutils.logger.Logger;
 /**
  * Dialog to set alarm time.
  */
-public class TimePickerDialogFragment extends DialogFragment {
+public class TimePickerDialogFragment extends RoboDialogFragment {
     private Button mSet, mCancel;
     private TimePicker mPicker;
-    private final Logger log = Logger.getDefaultLogger();
+    @Inject private Logger log;
 
     /**
      * 
@@ -59,10 +63,10 @@ public class TimePickerDialogFragment extends DialogFragment {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-
         setStyle(DialogFragment.STYLE_NO_TITLE,
-                DynamicThemeHandler.getInstance().getIdForName(TimePickerDialogFragment.class.getName()));
+                RoboGuice.getInjector(getActivity()).getInstance(DynamicThemeHandler.class)
+                        .getIdForName(TimePickerDialogFragment.class.getName()));
+        super.onCreate(savedInstanceState);
     }
 
     @Override

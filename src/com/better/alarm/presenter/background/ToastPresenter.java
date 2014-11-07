@@ -17,38 +17,40 @@
 
 package com.better.alarm.presenter.background;
 
-import android.content.BroadcastReceiver;
+import javax.inject.Inject;
+
 import android.content.Context;
-import android.content.Intent;
 import android.widget.Toast;
 
+import com.better.alarm.Component;
 import com.better.alarm.R;
-import com.better.alarm.model.AlarmsManager;
+import com.better.alarm.events.AlarmSetEvent;
+import com.better.alarm.events.IBus;
 import com.better.alarm.model.interfaces.Alarm;
 import com.better.alarm.model.interfaces.AlarmNotFoundException;
-import com.better.alarm.model.interfaces.Intents;
+import com.better.alarm.model.interfaces.IAlarmsManager;
 import com.github.androidutils.logger.Logger;
+import com.squareup.otto.Subscribe;
 
-public class ToastPresenter extends BroadcastReceiver {
-
+public class ToastPresenter extends Component {
     private static Toast sToast = null;
+    @Inject private IAlarmsManager alarms;
+    @Inject private Logger logger;
+    @Inject private IBus bus;
+    @Inject private Context context;
 
     @Override
-    public void onReceive(Context context, Intent intent) {
-        String action = intent.getAction();
-        if (Intents.ACTION_ALARM_SET.equals(action)) {
-            Alarm alarm;
-            int id = intent.getIntExtra(Intents.EXTRA_ID, -1);
-            try {
-                alarm = AlarmsManager.getAlarmsManager().getAlarm(id);
-                if (alarm.isEnabled()) {
-                    popAlarmSetToast(context, alarm);
-                } else {
-                    Logger.getDefaultLogger().w("Alarm " + id + " is already disabled");
-                }
-            } catch (AlarmNotFoundException e) {
-                Logger.getDefaultLogger().w("Alarm " + id + " could not be found. Must be deleted");
-            }
+    public void init() {
+        bus.register(this);
+    }
+
+    @Subscribe
+    public void handle(AlarmSetEvent alarmSetEvent) throws AlarmNotFoundException {
+        Alarm alarm = alarms.getAlarm(alarmSetEvent.id);
+        if (alarm.isEnabled()) {
+            popAlarmSetToast(context, alarm);
+        } else {
+            logger.w("Alarm " + alarmSetEvent.id + " is already disabled");
         }
     }
 

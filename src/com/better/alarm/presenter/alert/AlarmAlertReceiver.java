@@ -19,82 +19,83 @@ package com.better.alarm.presenter.alert;
 
 import java.util.Calendar;
 
+import javax.inject.Inject;
+
 import android.app.KeyguardManager;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.preference.PreferenceManager;
 import android.support.v4.app.NotificationCompat;
 import android.text.format.DateFormat;
 
+import com.better.alarm.Component;
 import com.better.alarm.R;
-import com.better.alarm.model.AlarmsManager;
+import com.better.alarm.events.AlarmFiredEvent;
+import com.better.alarm.events.DismissedEvent;
+import com.better.alarm.events.IBus;
+import com.better.alarm.events.PrealarmFiredEvent;
+import com.better.alarm.events.RequestDismiss;
+import com.better.alarm.events.RequestSnooze;
+import com.better.alarm.events.SnoozeCanceledEvent;
+import com.better.alarm.events.SnoozedEvent;
+import com.better.alarm.events.SoundExpiredEvent;
 import com.better.alarm.model.interfaces.Alarm;
 import com.better.alarm.model.interfaces.AlarmNotFoundException;
 import com.better.alarm.model.interfaces.IAlarmsManager;
 import com.better.alarm.model.interfaces.Intents;
-import com.better.alarm.model.interfaces.PresentationToModelIntents;
 import com.better.alarm.presenter.TransparentActivity;
 import com.github.androidutils.logger.Logger;
+import com.squareup.otto.Subscribe;
 
 /**
  * Glue class: connects AlarmAlert IntentReceiver to AlarmAlert activity. Passes
  * through Alarm ID.
  */
-public class AlarmAlertReceiver extends BroadcastReceiver {
-
-    private static final String ACTION_CANCEL_NOTIFICATION = "AlarmAlertReceiver.ACTION_CANCEL_NOTIFICATION";
+public class AlarmAlertReceiver extends Component {
     private static final String DM12 = "E h:mm aa";
     private static final String DM24 = "E kk:mm";
     private static final int NOTIFICATION_OFFSET = 1000;
-    Context mContext;
-    NotificationManager nm;
-    IAlarmsManager alarmsManager;
-    Alarm alarm;
+    @Inject private Context mContext;
+    @Inject private NotificationManager nm;
+    @Inject private IAlarmsManager alarmsManager;
+    @Inject private Logger logger;
+    @Inject private IBus bus;
+    @Inject private Intents intents;
 
     @Override
-    public void onReceive(final Context context, final Intent intent) {
-        mContext = context;
-        alarmsManager = AlarmsManager.getAlarmsManager();
-        nm = (NotificationManager) mContext.getSystemService(Context.NOTIFICATION_SERVICE);
-        String action = intent.getAction();
-        int id = intent.getIntExtra(Intents.EXTRA_ID, -1);
-        try {
-            if (id != -1) {
-                alarm = alarmsManager.getAlarm(id);
-            }
+    public void init() {
+        bus.register(this);
+    }
 
-            if (action.equals(Intents.ALARM_ALERT_ACTION) || action.equals(Intents.ALARM_PREALARM_ACTION)) {
-                // our alarm fired again, remove snooze notification
-                nm.cancel(id + NOTIFICATION_OFFSET);
-                onAlert(alarm);
+    @Subscribe
+    public void handle(AlarmFiredEvent event) throws AlarmNotFoundException {
+        // our alarm fired again, remove snooze notification
+        nm.cancel(event.id + NOTIFICATION_OFFSET);
+        Alarm alarm = alarmsManager.getAlarm(event.id);
+        onAlert(alarm);
+    }
 
-            } else if (action.equals(Intents.ALARM_DISMISS_ACTION)) {
-                nm.cancel(id);
-                nm.cancel(id + NOTIFICATION_OFFSET);
+    @Subscribe
+    public void handle(PrealarmFiredEvent event) throws AlarmNotFoundException {
+        // our alarm fired again, remove snooze notification
+        nm.cancel(event.id + NOTIFICATION_OFFSET);
+        Alarm alarm = alarmsManager.getAlarm(event.id);
+        onAlert(alarm);
+    }
 
-            } else if (action.equals(Intents.ACTION_CANCEL_SNOOZE)) {
-                nm.cancel(id);
-                nm.cancel(id + NOTIFICATION_OFFSET);
+    @Subscribe
+    public void handle(DismissedEvent event) {
+        nm.cancel(event.id);
+        nm.cancel(event.id + NOTIFICATION_OFFSET);
+    }
 
-            } else if (action.equals(Intents.ALARM_SNOOZE_ACTION)) {
-                nm.cancel(id);
-                onSnoozed(id);
-
-            } else if (action.equals(Intents.ACTION_SOUND_EXPIRED)) {
-                onSoundExpired(id);
-
-            } else if (action.equals(ACTION_CANCEL_NOTIFICATION)) {
-                alarmsManager.dismiss(alarm);
-            }
-        } catch (AlarmNotFoundException e) {
-            Logger.getDefaultLogger().d("Alarm not found");
-            nm.cancel(id);
-            nm.cancel(id + NOTIFICATION_OFFSET);
-        }
+    @Subscribe
+    public void handle(SnoozeCanceledEvent event) {
+        nm.cancel(event.id);
+        nm.cancel(event.id + NOTIFICATION_OFFSET);
     }
 
     private void onAlert(Alarm alarm) {
@@ -119,10 +120,8 @@ public class AlarmAlertReceiver extends BroadcastReceiver {
         Intent notify = new Intent(mContext, c);
         notify.putExtra(Intents.EXTRA_ID, id);
         PendingIntent pendingNotify = PendingIntent.getActivity(mContext, id, notify, 0);
-        PendingIntent pendingSnooze = PresentationToModelIntents.createPendingIntent(mContext,
-                PresentationToModelIntents.ACTION_REQUEST_SNOOZE, id);
-        PendingIntent pendingDismiss = PresentationToModelIntents.createPendingIntent(mContext,
-                PresentationToModelIntents.ACTION_REQUEST_DISMISS, id);
+        PendingIntent pendingSnooze = intents.createPendingIntent(RequestSnooze.class, id);
+        PendingIntent pendingDismiss = intents.createPendingIntent(RequestDismiss.class, id);
 
         //@formatter:off
         Notification status = new NotificationCompat.Builder(mContext)
@@ -147,13 +146,14 @@ public class AlarmAlertReceiver extends BroadcastReceiver {
         nm.notify(id, status);
     }
 
-    private void onSnoozed(int id) {
+    @Subscribe
+    public void handle(SnoozedEvent event) throws AlarmNotFoundException {
+        int id = event.id;
+        Alarm alarm = alarmsManager.getAlarm(event.id);
+        nm.cancel(id);
 
         // What to do, when a user clicks on the notification bar
-        Intent cancelSnooze = new Intent(mContext, AlarmAlertReceiver.class);
-        cancelSnooze.setAction(ACTION_CANCEL_NOTIFICATION);
-        cancelSnooze.putExtra(Intents.EXTRA_ID, id);
-        PendingIntent pCancelSnooze = PendingIntent.getBroadcast(mContext, id, cancelSnooze, 0);
+        PendingIntent pCancelSnooze = intents.createPendingIntent(RequestDismiss.class, id);
 
         // When button Reschedule is clicked, the TransparentActivity with
         // TimePickerFragment to set new alarm time is launched
@@ -161,8 +161,7 @@ public class AlarmAlertReceiver extends BroadcastReceiver {
         reschedule.putExtra(Intents.EXTRA_ID, id);
         PendingIntent pendingReschedule = PendingIntent.getActivity(mContext, id, reschedule, 0);
 
-        PendingIntent pendingDismiss = PresentationToModelIntents.createPendingIntent(mContext,
-                PresentationToModelIntents.ACTION_REQUEST_DISMISS, id);
+        PendingIntent pendingDismiss = intents.createPendingIntent(RequestDismiss.class, id);
 
         String label = alarm.getLabelOrDefault(mContext);
 
@@ -170,7 +169,7 @@ public class AlarmAlertReceiver extends BroadcastReceiver {
         Notification status = new NotificationCompat.Builder(mContext)
                 // Get the display time for the snooze and update the notification.
                 .setContentTitle(mContext.getString(R.string.alarm_notify_snooze_label, label))
-                .setContentText(mContext.getString(R.string.alarm_notify_snooze_text, formatTimeString()))
+                .setContentText(mContext.getString(R.string.alarm_notify_snooze_text, formatTimeString(alarm)))
                 .setSmallIcon(R.drawable.stat_notify_alarm)
                 .setContentIntent(pCancelSnooze)
                 .setOngoing(true)
@@ -185,18 +184,18 @@ public class AlarmAlertReceiver extends BroadcastReceiver {
         nm.notify(id + NOTIFICATION_OFFSET, status);
     }
 
-    private String formatTimeString() {
+    private String formatTimeString(Alarm alarm) {
         String format = android.text.format.DateFormat.is24HourFormat(mContext) ? DM24 : DM12;
         Calendar calendar = alarm.getSnoozedTime();
         String timeString = (String) DateFormat.format(format, calendar);
         return timeString;
     }
 
-    private void onSoundExpired(int id) {
-        Intent dismissAlarm = new Intent(mContext, AlarmAlertReceiver.class);
-        dismissAlarm.setAction(ACTION_CANCEL_NOTIFICATION);
-        dismissAlarm.putExtra(Intents.EXTRA_ID, id);
-        PendingIntent intent = PendingIntent.getBroadcast(mContext, id, dismissAlarm, 0);
+    @Subscribe
+    public void handle(SoundExpiredEvent event) throws AlarmNotFoundException {
+        int id = event.id;
+        Alarm alarm = alarmsManager.getAlarm(event.id);
+        PendingIntent intent = intents.createPendingIntent(RequestDismiss.class, id);
         // Update the notification to indicate that the alert has been
         // silenced.
         String label = alarm.getLabelOrDefault(mContext);

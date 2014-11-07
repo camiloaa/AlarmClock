@@ -1,5 +1,7 @@
 package com.better.alarm.presenter;
 
+import javax.inject.Inject;
+
 import org.acra.ACRA;
 
 import android.app.ActionBar;
@@ -17,7 +19,6 @@ import android.widget.EditText;
 import android.widget.ShareActionProvider;
 
 import com.better.alarm.R;
-import com.google.common.base.Preconditions;
 
 /**
  * This class handles options menu and action bar
@@ -26,16 +27,8 @@ import com.google.common.base.Preconditions;
  * 
  */
 public class ActionBarHandler {
-
     private static final int JELLY_BEAN_MR1 = 17;
-    private final Context mContext;
-
-    /**
-     * @param cmContext
-     */
-    public ActionBarHandler(Context context) {
-        this.mContext = Preconditions.checkNotNull(context);
-    }
+    @Inject private Context mContext;
 
     /**
      * Delegate {@link Activity#onCreateOptionsMenu(Menu)}

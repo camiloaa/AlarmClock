@@ -17,11 +17,17 @@
 
 package com.better.alarm.presenter;
 
-import android.app.Activity;
+import javax.inject.Inject;
+
+import roboguice.RoboGuice;
+import roboguice.activity.RoboActivity;
+import roboguice.inject.ContentView;
+import roboguice.inject.InjectResource;
+import roboguice.inject.InjectView;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.os.Bundle;
-import android.preference.PreferenceManager;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -35,45 +41,41 @@ import com.better.alarm.presenter.TimePickerDialogFragment.AlarmTimePickerDialog
 /**
  * This activity displays a list of alarms and optionally a details fragment.
  */
-public class AlarmsListActivity extends Activity implements AlarmTimePickerDialogHandler {
+@ContentView(R.layout.list_activity)
+public class AlarmsListActivity extends RoboActivity implements AlarmTimePickerDialogHandler {
+    @Inject private ActionBarHandler mActionBarHandler;
+    @Inject private SharedPreferences sp;
+    private AlarmsListFragment alarmsListFragment;
+    @InjectResource(R.bool.isTablet) private boolean isTablet;
+    @InjectView(R.id.list_activity_info_fragment) View nextAlarmFragment;
 
-    private ActionBarHandler mActionBarHandler;
+    private Alarm timePickerAlarm;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        setTheme(DynamicThemeHandler.getInstance().getIdForName(AlarmsListActivity.class.getName()));
+        RoboGuice.getInjector(this).getInstance(DynamicThemeHandler.class).setThemeFor(this, AlarmsListActivity.class);
         super.onCreate(savedInstanceState);
-
-        mActionBarHandler = new ActionBarHandler(this);
-
-        boolean isTablet = !getResources().getBoolean(R.bool.isTablet);
-        if (isTablet) {
+        if (!isTablet) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         }
-
-        setContentView(R.layout.list_activity);
         alarmsListFragment = (AlarmsListFragment) getFragmentManager().findFragmentById(
                 R.id.list_activity_list_fragment);
-
-        if (isTablet) {
-            // TODO
-            // alarmsListFragment.setShowDetailsStrategy(showDetailsInFragmentStrategy);
-            alarmsListFragment.setShowDetailsStrategy(showDetailsInActivityFragment);
-        } else {
-            alarmsListFragment.setShowDetailsStrategy(showDetailsInActivityFragment);
-        }
+        alarmsListFragment.setShowDetailsStrategy(showDetailsInActivityFragment);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
 
-        View nextAlarmFragment = findViewById(R.id.list_activity_info_fragment);
-        if (PreferenceManager.getDefaultSharedPreferences(this).getBoolean("show_info_fragment", false)) {
+        if (sp.getBoolean("show_info_fragment", false)) {
             nextAlarmFragment.setVisibility(View.VISIBLE);
         } else {
             nextAlarmFragment.setVisibility(View.GONE);
         }
+    }
+
+    public AlarmsListActivity() {
+        super();
     }
 
     @Override
@@ -125,9 +127,6 @@ public class AlarmsListActivity extends Activity implements AlarmTimePickerDialo
             startActivity(intent);
         }
     };
-    private AlarmsListFragment alarmsListFragment;
-
-    private Alarm timePickerAlarm;
 
     public void showTimePicker(Alarm alarm) {
         timePickerAlarm = alarm;

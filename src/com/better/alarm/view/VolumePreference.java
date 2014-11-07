@@ -18,9 +18,11 @@ package com.better.alarm.view;
 
 import java.util.ArrayList;
 
+import javax.inject.Inject;
+
+import roboguice.RoboGuice;
 import android.app.Dialog;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
 import android.content.res.TypedArray;
@@ -32,7 +34,6 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Message;
 import android.preference.DialogPreference;
-import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.util.AttributeSet;
 import android.view.KeyEvent;
@@ -42,7 +43,11 @@ import android.widget.SeekBar;
 import android.widget.SeekBar.OnSeekBarChangeListener;
 
 import com.better.alarm.R;
-import com.better.alarm.model.interfaces.Intents;
+import com.better.alarm.events.IBus;
+import com.better.alarm.events.StartAlarmSampleEvent;
+import com.better.alarm.events.StartPrealarmSampleEvent;
+import com.better.alarm.events.StopAlarmSampleEvent;
+import com.better.alarm.events.StopPrealarmSampleEvent;
 import com.better.alarm.view.VolumePreference.SeekBarVolumizer;
 import com.github.androidutils.logger.Logger;
 
@@ -67,16 +72,30 @@ interface IVolumizerStrategy {
  * This class represents the dialog
  */
 public class VolumePreference extends DialogPreference implements View.OnKeyListener, IVolumizerMaster {
+    public static final int MAX_ALARM_VOLUME = 10;
+
+    public static final int MAX_PREALARM_VOLUME = 10;
+
+    public static final int DEFAULT_PREALARM_VOLUME = 5;
+
+    public static final int DEFAULT_ALARM_VOLUME = 10;
+
+    public static final String KEY_PREALARM_VOLUME = "key_prealarm_volume";
+
+    public static final String KEY_ALARM_VOLUME = "key_alarm_volume";
+
     private final Drawable mMyIcon;
 
     private final ArrayList<SeekBarVolumizer> volumizers;
     private SeekBarVolumizer activeVolumizer;
 
+    @Inject private AlarmVolumizerStrategy alarmVolumizer;
+    @Inject private PreAlarmVolumizerStrategy prealarmVolumizer;
+
     public VolumePreference(Context context, AttributeSet attrs) {
         super(context, attrs);
-
         setDialogLayoutResource(R.layout.seekbar_dialog);
-
+        RoboGuice.getInjector(context).injectMembers(this);
         // Steal the XML dialogIcon attribute's value
         mMyIcon = getDialogIcon();
         setDialogIcon(null);
@@ -100,10 +119,10 @@ public class VolumePreference extends DialogPreference implements View.OnKeyList
                 AudioManager.STREAM_ALARM, null), this));
 
         final SeekBar alarmSeekBar = (SeekBar) view.findViewById(R.id.seekbar_dialog_seekbar_alarm_volume);
-        volumizers.add(new SeekBarVolumizer(alarmSeekBar, new AlarmVolumizerStrategy(getContext()), this));
+        volumizers.add(new SeekBarVolumizer(alarmSeekBar, alarmVolumizer, this));
 
         final SeekBar preAlarmSeekBar = (SeekBar) view.findViewById(R.id.seekbar_dialog_seekbar_prealarm_volume);
-        volumizers.add(new SeekBarVolumizer(preAlarmSeekBar, new PreAlarmVolumizerStrategy(getContext()), this));
+        volumizers.add(new SeekBarVolumizer(preAlarmSeekBar, prealarmVolumizer, this));
 
         activeVolumizer = volumizers.get(0);
 
@@ -287,30 +306,26 @@ public class VolumePreference extends DialogPreference implements View.OnKeyList
      * preference, which is changed by the volumizer strategy.
      */
     public static class PreAlarmVolumizerStrategy implements IVolumizerStrategy {
-        private final Context mContext;
-        Logger log = Logger.getDefaultLogger();
-        private final SharedPreferences sp;
+        @Inject private Context mContext;
+        @Inject private Logger log;
+        @Inject private SharedPreferences sp;
+        @Inject private IBus bus;
         private boolean isPlaying = false;
-
-        public PreAlarmVolumizerStrategy(Context context) {
-            mContext = context;
-            sp = PreferenceManager.getDefaultSharedPreferences(mContext);
-        }
 
         @Override
         public int getMaxVolume() {
-            return Intents.MAX_PREALARM_VOLUME;
+            return MAX_PREALARM_VOLUME;
         }
 
         @Override
         public int getVolume() {
-            return sp.getInt(Intents.KEY_PREALARM_VOLUME, Intents.DEFAULT_PREALARM_VOLUME);
+            return sp.getInt(KEY_PREALARM_VOLUME, DEFAULT_PREALARM_VOLUME);
         }
 
         @Override
         public void setVolume(int progress) {
             Editor editor = sp.edit();
-            editor.putInt(Intents.KEY_PREALARM_VOLUME, progress);
+            editor.putInt(KEY_PREALARM_VOLUME, progress);
             editor.commit();
         };
 
@@ -318,7 +333,7 @@ public class VolumePreference extends DialogPreference implements View.OnKeyList
         public void stopSample() {
             if (isPlaying) {
                 isPlaying = false;
-                mContext.sendBroadcast(new Intent(Intents.ACTION_STOP_PREALARM_SAMPLE));
+                bus.post(new StopPrealarmSampleEvent());
             }
         }
 
@@ -326,7 +341,7 @@ public class VolumePreference extends DialogPreference implements View.OnKeyList
         public void startSample() {
             if (!isPlaying) {
                 isPlaying = true;
-                mContext.sendBroadcast(new Intent(Intents.ACTION_START_PREALARM_SAMPLE));
+                bus.post(new StartPrealarmSampleEvent());
             }
         }
     }
@@ -337,30 +352,26 @@ public class VolumePreference extends DialogPreference implements View.OnKeyList
      * preference, which is changed by the volumizer strategy.
      */
     public static class AlarmVolumizerStrategy implements IVolumizerStrategy {
-        private final Context mContext;
-        Logger log = Logger.getDefaultLogger();
-        private final SharedPreferences sp;
+        @Inject private Context mContext;
+        @Inject private Logger log;
+        @Inject private SharedPreferences sp;
+        @Inject private IBus bus;
         private boolean isPlaying = false;
-
-        public AlarmVolumizerStrategy(Context context) {
-            mContext = context;
-            sp = PreferenceManager.getDefaultSharedPreferences(mContext);
-        }
 
         @Override
         public int getMaxVolume() {
-            return Intents.MAX_ALARM_VOLUME;
+            return MAX_ALARM_VOLUME;
         }
 
         @Override
         public int getVolume() {
-            return sp.getInt(Intents.KEY_ALARM_VOLUME, Intents.DEFAULT_ALARM_VOLUME);
+            return sp.getInt(KEY_ALARM_VOLUME, DEFAULT_ALARM_VOLUME);
         }
 
         @Override
         public void setVolume(int progress) {
             Editor editor = sp.edit();
-            editor.putInt(Intents.KEY_ALARM_VOLUME, progress);
+            editor.putInt(KEY_ALARM_VOLUME, progress);
             editor.commit();
         };
 
@@ -368,7 +379,7 @@ public class VolumePreference extends DialogPreference implements View.OnKeyList
         public void stopSample() {
             if (isPlaying) {
                 isPlaying = false;
-                mContext.sendBroadcast(new Intent(Intents.ACTION_STOP_ALARM_SAMPLE));
+                bus.post(new StopAlarmSampleEvent());
             }
         }
 
@@ -376,7 +387,7 @@ public class VolumePreference extends DialogPreference implements View.OnKeyList
         public void startSample() {
             if (!isPlaying) {
                 isPlaying = true;
-                mContext.sendBroadcast(new Intent(Intents.ACTION_START_ALARM_SAMPLE));
+                bus.post(new StartAlarmSampleEvent());
             }
         }
     }

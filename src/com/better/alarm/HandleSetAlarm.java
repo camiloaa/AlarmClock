@@ -22,12 +22,13 @@ import static android.provider.AlarmClock.EXTRA_HOUR;
 
 import java.util.Collection;
 
-import android.app.Activity;
+import javax.inject.Inject;
+
+import roboguice.activity.RoboActivity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.provider.AlarmClock;
 
-import com.better.alarm.model.AlarmsManager;
 import com.better.alarm.model.interfaces.Alarm;
 import com.better.alarm.model.interfaces.IAlarmsManager;
 import com.better.alarm.model.interfaces.Intents;
@@ -37,14 +38,13 @@ import com.github.androidutils.logger.Logger;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
 
-public class HandleSetAlarm extends Activity {
-
-    private IAlarmsManager alarms;
+public class HandleSetAlarm extends RoboActivity {
+    @Inject private IAlarmsManager alarms;
+    @Inject private Logger logger;
 
     @Override
     protected void onCreate(Bundle icicle) {
         super.onCreate(icicle);
-        alarms = AlarmsManager.getAlarmsManager();
         Intent intent = getIntent();
         Intent startDetailsIntent = new Intent(this, AlarmDetailsActivity.class);
         if (intent == null || !ACTION_SET_ALARM.equals(intent.getAction())) {
@@ -91,8 +91,8 @@ public class HandleSetAlarm extends Activity {
 
         Alarm alarm;
         if (sameAlarms.isEmpty()) {
-            Logger.getDefaultLogger().d("No alarm found, creating a new one");
-            alarm = AlarmsManager.getAlarmsManager().createNewAlarm();
+            logger.d("No alarm found, creating a new one");
+            alarm = alarms.createNewAlarm();
             //@formatter:off
             alarm.edit()
                 .setHour(hours)
@@ -102,7 +102,7 @@ public class HandleSetAlarm extends Activity {
                 .commit();
         //@formatter:on
         } else {
-            Logger.getDefaultLogger().d("Enable existing alarm");
+            logger.d("Enable existing alarm");
             alarm = sameAlarms.iterator().next();
             alarm.enable(true);
         }

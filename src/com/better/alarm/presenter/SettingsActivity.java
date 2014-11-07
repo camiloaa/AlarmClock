@@ -17,7 +17,11 @@
 
 package com.better.alarm.presenter;
 
-import android.content.Context;
+import javax.inject.Inject;
+
+import roboguice.RoboGuice;
+import roboguice.activity.RoboPreferenceActivity;
+import roboguice.inject.InjectPreference;
 import android.content.Intent;
 import android.media.AudioManager;
 import android.media.RingtoneManager;
@@ -29,7 +33,6 @@ import android.preference.CheckBoxPreference;
 import android.preference.ListPreference;
 import android.preference.Preference;
 import android.preference.Preference.OnPreferenceChangeListener;
-import android.preference.PreferenceActivity;
 import android.preference.PreferenceScreen;
 import android.provider.Settings;
 import android.view.Menu;
@@ -41,7 +44,7 @@ import com.better.alarm.view.AlarmPreference;
 /**
  * Settings for the Alarm Clock.
  */
-public class SettingsActivity extends PreferenceActivity implements Preference.OnPreferenceChangeListener {
+public class SettingsActivity extends RoboPreferenceActivity implements Preference.OnPreferenceChangeListener {
 
     private static final int ALARM_STREAM_TYPE_BIT = 1 << AudioManager.STREAM_ALARM;
 
@@ -53,9 +56,18 @@ public class SettingsActivity extends PreferenceActivity implements Preference.O
     static final String KEY_PREALARM_DURATION = "prealarm_duration";
     public static final String KEY_FADE_IN_TIME_SEC = "fade_in_time_sec";
 
+    @Inject private Vibrator vibrator;
+
+    @InjectPreference(KEY_ALARM_SNOOZE) private ListPreference snoozeListPref;
+    @InjectPreference(KEY_ALARM_IN_SILENT_MODE) private CheckBoxPreference alarmInSilentModePref;
+    @InjectPreference(KEY_AUTO_SILENCE) private ListPreference autoSilencePreference;
+    @InjectPreference(KEY_PREALARM_DURATION) private ListPreference preAlarmDuration;
+    @InjectPreference(KEY_FADE_IN_TIME_SEC) private ListPreference fadeInTime;
+    @InjectPreference("theme") private ListPreference theme;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        setTheme(DynamicThemeHandler.getInstance().getIdForName(SettingsActivity.class.getName()));
+        RoboGuice.getInjector(this).getInstance(DynamicThemeHandler.class).setThemeFor(this, SettingsActivity.class);
         super.onCreate(savedInstanceState);
 
         addPreferencesFromResource(R.xml.preferences);
@@ -67,15 +79,11 @@ public class SettingsActivity extends PreferenceActivity implements Preference.O
         }
         ringtone.setChangeDefault();
 
-        boolean hasVibrator = ((Vibrator) getSystemService(Context.VIBRATOR_SERVICE)).hasVibrator();
-        // #65 we have to check if preference is present before we try to remove
-        // it TODO this is very strange!
-        if (!hasVibrator && findPreference("vibrate") != null) {
+        if (!vibrator.hasVibrator() && findPreference("vibrate") != null) {
             getPreferenceScreen().removePreference(findPreference("vibrate"));
         }
 
-        final Preference theme = findPreference("theme");
-        theme.setOnPreferenceChangeListener(new OnPreferenceChangeListener() {
+        findPreference("theme").setOnPreferenceChangeListener(new OnPreferenceChangeListener() {
             @Override
             public boolean onPreferenceChange(Preference preference, Object newValue) {
                 new Handler().post(new Runnable() {
@@ -185,29 +193,23 @@ public class SettingsActivity extends PreferenceActivity implements Preference.O
     }
 
     private void refresh() {
-        final CheckBoxPreference alarmInSilentModePref = (CheckBoxPreference) findPreference(KEY_ALARM_IN_SILENT_MODE);
         final int silentModeStreams = Settings.System.getInt(getContentResolver(),
                 Settings.System.MODE_RINGER_STREAMS_AFFECTED, 0);
         alarmInSilentModePref.setChecked((silentModeStreams & ALARM_STREAM_TYPE_BIT) == 0);
 
-        ListPreference listPref = (ListPreference) findPreference(KEY_ALARM_SNOOZE);
-        listPref.setSummary(listPref.getEntry());
-        listPref.setOnPreferenceChangeListener(this);
+        snoozeListPref.setSummary(snoozeListPref.getEntry());
+        snoozeListPref.setOnPreferenceChangeListener(this);
 
-        listPref = (ListPreference) findPreference(KEY_AUTO_SILENCE);
-        String delay = listPref.getValue();
-        updateAutoSnoozeSummary(listPref, delay);
-        listPref.setOnPreferenceChangeListener(this);
+        String delay = autoSilencePreference.getValue();
+        updateAutoSnoozeSummary(autoSilencePreference, delay);
+        autoSilencePreference.setOnPreferenceChangeListener(this);
 
-        listPref = (ListPreference) findPreference(KEY_PREALARM_DURATION);
-        updatePreAlarmDurationSummary(listPref, listPref.getValue());
-        listPref.setOnPreferenceChangeListener(this);
+        updatePreAlarmDurationSummary(preAlarmDuration, preAlarmDuration.getValue());
+        preAlarmDuration.setOnPreferenceChangeListener(this);
 
-        listPref = (ListPreference) findPreference(KEY_FADE_IN_TIME_SEC);
-        updateFadeInTimeSummary(listPref, listPref.getValue());
-        listPref.setOnPreferenceChangeListener(this);
+        updateFadeInTimeSummary(fadeInTime, fadeInTime.getValue());
+        fadeInTime.setOnPreferenceChangeListener(this);
 
-        ListPreference theme = (ListPreference) findPreference("theme");
         theme.setSummary(theme.getEntry());
     }
 }

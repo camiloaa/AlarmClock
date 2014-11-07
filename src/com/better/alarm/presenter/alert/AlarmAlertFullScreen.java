@@ -17,11 +17,11 @@
 
 package com.better.alarm.presenter.alert;
 
-import android.app.Activity;
-import android.content.BroadcastReceiver;
-import android.content.Context;
+import javax.inject.Inject;
+
+import roboguice.RoboGuice;
+import roboguice.activity.RoboActivity;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
@@ -37,7 +37,12 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import com.better.alarm.R;
-import com.better.alarm.model.AlarmsManager;
+import com.better.alarm.events.DemuteEvent;
+import com.better.alarm.events.DismissedEvent;
+import com.better.alarm.events.IBus;
+import com.better.alarm.events.MuteEvent;
+import com.better.alarm.events.SnoozedEvent;
+import com.better.alarm.events.SoundExpiredEvent;
 import com.better.alarm.model.interfaces.Alarm;
 import com.better.alarm.model.interfaces.AlarmNotFoundException;
 import com.better.alarm.model.interfaces.IAlarmsManager;
@@ -48,59 +53,36 @@ import com.better.alarm.presenter.TimePickerDialogFragment;
 import com.better.alarm.presenter.TimePickerDialogFragment.AlarmTimePickerDialogHandler;
 import com.better.alarm.presenter.TimePickerDialogFragment.OnAlarmTimePickerCanceledListener;
 import com.github.androidutils.logger.Logger;
+import com.squareup.otto.Subscribe;
 
 /**
  * Alarm Clock alarm alert: pops visible indicator and plays alarm tone. This
  * activity is the full screen version which shows over the lock screen with the
  * wallpaper as the background.
  */
-public class AlarmAlertFullScreen extends Activity implements AlarmTimePickerDialogHandler,
+public class AlarmAlertFullScreen extends RoboActivity implements AlarmTimePickerDialogHandler,
         OnAlarmTimePickerCanceledListener {
     private static final boolean LONGCLICK_DISMISS_DEFAULT = false;
     private static final String LONGCLICK_DISMISS_KEY = "longclick_dismiss_key";
     private static final String DEFAULT_VOLUME_BEHAVIOR = "2";
     protected static final String SCREEN_OFF = "screen_off";
 
+    private final EventListener eventListener = new EventListener();
     protected Alarm mAlarm;
     private int mVolumeBehavior;
     boolean mFullscreenStyle;
+    @Inject private IAlarmsManager alarmsManager;
 
-    private IAlarmsManager alarmsManager;
-
+    @Inject private Logger logger;
     private boolean longClickToDismiss;
-    /**
-     * Receives Intents from the model
-     */
-    private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            int id = intent.getIntExtra(Intents.EXTRA_ID, -1);
-            if (action.equals(Intents.ALARM_SNOOZE_ACTION)) {
-                if (mAlarm.getId() == id) {
-                    finish();
-                }
-            } else if (action.equals(Intents.ALARM_DISMISS_ACTION)) {
-                if (mAlarm.getId() == id) {
-                    finish();
-                }
-            } else if (action.equals(Intents.ACTION_SOUND_EXPIRED)) {
-                if (mAlarm.getId() == id) {
-                    // if sound has expired there is no need to keep the screen
-                    // on
-                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                }
-            }
-        }
-    };
-    private SharedPreferences sp;
+
+    @Inject private SharedPreferences sp;
+    @Inject private IBus bus;
 
     @Override
     protected void onCreate(Bundle icicle) {
-        setTheme(DynamicThemeHandler.getInstance().getIdForName(getClassName()));
+        RoboGuice.getInjector(this).getInstance(DynamicThemeHandler.class).setThemeFor(this, getClassName());
         super.onCreate(icicle);
-
-        sp = PreferenceManager.getDefaultSharedPreferences(this);
 
         if (getResources().getBoolean(R.bool.isTablet)) {
             // preserve initial rotation and disable rotation change
@@ -112,8 +94,6 @@ public class AlarmAlertFullScreen extends Activity implements AlarmTimePickerDia
         } else {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         }
-
-        alarmsManager = AlarmsManager.getAlarmsManager();
 
         int id = getIntent().getIntExtra(Intents.EXTRA_ID, -1);
         try {
@@ -135,15 +115,9 @@ public class AlarmAlertFullScreen extends Activity implements AlarmTimePickerDia
 
             updateLayout();
 
-            // Register to get the alarm killed/snooze/dismiss intent.
-            IntentFilter filter = new IntentFilter();
-            filter.addAction(Intents.ALARM_SNOOZE_ACTION);
-            filter.addAction(Intents.ALARM_DISMISS_ACTION);
-            filter.addAction(Intents.ACTION_CANCEL_SNOOZE);
-            filter.addAction(Intents.ACTION_SOUND_EXPIRED);
-            registerReceiver(mReceiver, filter);
+            bus.register(eventListener);
         } catch (AlarmNotFoundException e) {
-            Logger.getDefaultLogger().d("Alarm not found");
+            logger.d("Alarm not found");
         }
     }
 
@@ -192,7 +166,7 @@ public class AlarmAlertFullScreen extends Activity implements AlarmTimePickerDia
             public boolean onLongClick(View v) {
                 if (isSnoozeEnabled()) {
                     TimePickerDialogFragment.showTimePicker(getFragmentManager());
-                    AlarmAlertFullScreen.this.sendBroadcast(new Intent(Intents.ACTION_MUTE));
+                    bus.post(new MuteEvent());
                 }
                 return true;
             }
@@ -248,14 +222,14 @@ public class AlarmAlertFullScreen extends Activity implements AlarmTimePickerDia
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
 
-        Logger.getDefaultLogger().d("AlarmAlert.OnNewIntent()");
+        logger.d("AlarmAlert.OnNewIntent()");
 
         int id = intent.getIntExtra(Intents.EXTRA_ID, -1);
         try {
             mAlarm = alarmsManager.getAlarm(id);
             setTitle();
         } catch (AlarmNotFoundException e) {
-            Logger.getDefaultLogger().d("Alarm not found");
+            logger.d("Alarm not found");
         }
 
     }
@@ -273,9 +247,9 @@ public class AlarmAlertFullScreen extends Activity implements AlarmTimePickerDia
     @Override
     public void onDestroy() {
         super.onDestroy();
-        Logger.getDefaultLogger().d("AlarmAlert.onDestroy()");
+        logger.d("AlarmAlert.onDestroy()");
         // No longer care about the alarm being killed.
-        unregisterReceiver(mReceiver);
+        bus.unregister(eventListener);
     }
 
     @Override
@@ -325,6 +299,35 @@ public class AlarmAlertFullScreen extends Activity implements AlarmTimePickerDia
 
     @Override
     public void onTimePickerCanceled() {
-        AlarmAlertFullScreen.this.sendBroadcast(new Intent(Intents.ACTION_DEMUTE));
+        bus.post(new DemuteEvent());
+    }
+
+    /**
+     * Has to be done so, because Otto does not look in the superclass when
+     * looking for listeners. I have inheritance!
+     */
+    private class EventListener {
+        @Subscribe
+        public void handle(SnoozedEvent event) {
+            if (mAlarm.getId() == event.id) {
+                finish();
+            }
+        }
+
+        @Subscribe
+        public void handle(DismissedEvent event) {
+            if (mAlarm.getId() == event.id) {
+                finish();
+            }
+        }
+
+        @Subscribe
+        public void handle(SoundExpiredEvent event) {
+            if (mAlarm.getId() == event.id) {
+                // if sound has expired there is no need to keep the screen
+                // on
+                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            }
+        }
     }
 }

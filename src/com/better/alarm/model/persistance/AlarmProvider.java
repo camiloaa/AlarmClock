@@ -27,7 +27,6 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.text.TextUtils;
 
-import com.github.androidutils.logger.LogcatLogWriter;
 import com.github.androidutils.logger.Logger;
 
 public class AlarmProvider extends ContentProvider {
@@ -50,7 +49,6 @@ public class AlarmProvider extends ContentProvider {
     @Override
     public boolean onCreate() {
         log = new Logger();
-        log.addLogWriter(LogcatLogWriter.getInstance());
         mOpenHelper = new AlarmDatabaseHelper(getContext(), log);
         return true;
     }

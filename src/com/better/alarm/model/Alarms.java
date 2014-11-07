@@ -22,55 +22,56 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import javax.inject.Inject;
+
 import org.acra.ACRA;
 
-import android.annotation.SuppressLint;
 import android.content.ContentResolver;
 import android.content.Context;
-import android.content.Intent;
 import android.database.Cursor;
 import android.os.CountDownTimer;
 import android.os.Handler;
 
+import com.better.alarm.IComponent;
+import com.better.alarm.events.AlarmListChanged;
+import com.better.alarm.events.IBus;
 import com.better.alarm.model.interfaces.Alarm;
 import com.better.alarm.model.interfaces.AlarmNotFoundException;
 import com.better.alarm.model.interfaces.IAlarmsManager;
-import com.better.alarm.model.interfaces.Intents;
 import com.better.alarm.model.persistance.AlarmContainer;
 import com.github.androidutils.logger.Logger;
+import com.github.androidutils.wakelock.WakeLockManager;
+import com.google.inject.Injector;
 
 /**
  * The Alarms implements application domain logic
  */
-@SuppressLint("UseSparseArrays")
-public class Alarms implements IAlarmsManager {
+public class Alarms implements IAlarmsManager, IComponent {
     /** in millis */
     private static final long RETRY_TOTAL_TIME = 61 * 1000;
     /** in millis */
     private static final long RETRY_INTERVAL = 500;
 
-    private final Context mContext;
-    private final Logger log;
-
-    private final IAlarmsScheduler mAlarmsScheduler;
-
-    private final ContentResolver mContentResolver;
     private final Map<Integer, AlarmCore> alarms;
-    private final AlarmStateNotifier broadcaster;
-
     private final DatabaseRetryCountDownTimer databaseRetryCountDownTimer;
 
-    Alarms(Context context, Logger logger, IAlarmsScheduler alarmsScheduler) {
-        mContext = context;
-        log = logger;
-        mAlarmsScheduler = alarmsScheduler;
+    @Inject private Context mContext;
+    @Inject private Logger log;
+    @Inject private IAlarmsScheduler mAlarmsScheduler;
+    @Inject private WakeLockManager wakelocks;
+    @Inject private Injector injector;
+    @Inject private ContentResolver mContentResolver;
+    @Inject private IBus bus;
 
-        mContentResolver = mContext.getContentResolver();
+    public Alarms() {
         alarms = new HashMap<Integer, AlarmCore>();
-        broadcaster = new AlarmStateNotifier(mContext);
-
         databaseRetryCountDownTimer = new DatabaseRetryCountDownTimer(RETRY_TOTAL_TIME, RETRY_INTERVAL);
+    }
 
+    @Override
+    public void init() {
+        injector.injectMembers(this);
+        mContentResolver = mContext.getContentResolver();
         boolean hasInitlized = tryReadDb();
         if (!hasInitlized) {
             log.w("Scheduling retry");
@@ -89,8 +90,8 @@ public class Alarms implements IAlarmsManager {
             try {
                 if (cursor.moveToFirst()) {
                     do {
-                        AlarmContainer container = new AlarmContainer(cursor, log, mContext);
-                        final AlarmCore a = new AlarmCore(container, mContext, log, mAlarmsScheduler, broadcaster);
+                        AlarmContainer container = new AlarmContainer(cursor, log, mContext, wakelocks);
+                        final AlarmCore a = new AlarmCore(container, injector);
                         alarms.put(a.getId(), a);
                     } while (cursor.moveToNext());
                 }
@@ -130,8 +131,8 @@ public class Alarms implements IAlarmsManager {
 
     @Override
     public Alarm createNewAlarm() {
-        AlarmContainer container = new AlarmContainer(log, mContext);
-        AlarmCore alarm = new AlarmCore(container, mContext, log, mAlarmsScheduler, broadcaster);
+        AlarmContainer container = new AlarmContainer(log, mContext, wakelocks);
+        AlarmCore alarm = new AlarmCore(container, injector);
         alarms.put(alarm.getId(), alarm);
         notifyAlarmListChangedListeners();
         return alarm;
@@ -228,7 +229,7 @@ public class Alarms implements IAlarmsManager {
     }
 
     private void notifyAlarmListChangedListeners() {
-        mContext.sendBroadcast(new Intent(Intents.ACTION_ALARM_CHANGED));
+        bus.post(new AlarmListChanged());
     }
 
     private final class DatabaseRetryCountDownTimer extends CountDownTimer {
