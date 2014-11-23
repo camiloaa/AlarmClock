@@ -44,7 +44,7 @@ import com.better.alarm.view.AlarmPreference;
 /**
  * Settings for the Alarm Clock.
  */
-public class SettingsActivity extends RoboPreferenceActivity implements Preference.OnPreferenceChangeListener {
+public class SettingsActivity extends RoboPreferenceActivity {
 
     private static final int ALARM_STREAM_TYPE_BIT = 1 << AudioManager.STREAM_ALARM;
 
@@ -124,12 +124,6 @@ public class SettingsActivity extends RoboPreferenceActivity implements Preferen
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
-        refresh();
-    }
-
-    @Override
     public boolean onPreferenceTreeClick(PreferenceScreen preferenceScreen, Preference preference) {
         if (KEY_ALARM_IN_SILENT_MODE.equals(preference.getKey())) {
             CheckBoxPreference pref = (CheckBoxPreference) preference;
@@ -151,64 +145,71 @@ public class SettingsActivity extends RoboPreferenceActivity implements Preferen
         return super.onPreferenceTreeClick(preferenceScreen, preference);
     }
 
-    @Override
-    public boolean onPreferenceChange(Preference pref, Object newValue) {
-        if (KEY_ALARM_SNOOZE.equals(pref.getKey())) {
-            final ListPreference listPref = (ListPreference) pref;
-            final int idx = listPref.findIndexOfValue((String) newValue);
-            listPref.setSummary(listPref.getEntries()[idx]);
-        } else if (KEY_AUTO_SILENCE.equals(pref.getKey())) {
-            final ListPreference listPref = (ListPreference) pref;
-            String delay = (String) newValue;
-            updateAutoSnoozeSummary(listPref, delay);
-        } else if (KEY_PREALARM_DURATION.equals(pref.getKey())) {
-            updatePreAlarmDurationSummary((ListPreference) pref, (String) newValue);
-        } else if (KEY_FADE_IN_TIME_SEC.equals(pref.getKey())) {
-            updateFadeInTimeSummary((ListPreference) pref, (String) newValue);
-        }
-        return true;
+    private void updateFadeInTimeSummary(String duration) {
+        fadeInTime.setSummary(getString(R.string.fade_in_summary, Integer.parseInt(duration)));
     }
 
-    private void updateFadeInTimeSummary(ListPreference listPref, String duration) {
-        int i = Integer.parseInt(duration);
-        listPref.setSummary(getString(R.string.fade_in_summary, i));
-    }
-
-    private void updateAutoSnoozeSummary(ListPreference listPref, String delay) {
+    private void updateAutoSnoozeSummary(String delay) {
         int i = Integer.parseInt(delay);
         if (i == -1) {
-            listPref.setSummary(R.string.auto_silence_never);
+            autoSilencePreference.setSummary(R.string.auto_silence_never);
         } else {
-            listPref.setSummary(getString(R.string.auto_silence_summary, i));
+            autoSilencePreference.setSummary(getString(R.string.auto_silence_summary, i));
         }
     }
 
-    private void updatePreAlarmDurationSummary(ListPreference listPref, String duration) {
+    private void updatePreAlarmDurationSummary(String duration) {
         int i = Integer.parseInt(duration);
         if (i == -1) {
-            listPref.setSummary(getString(R.string.prealarm_off_summary));
+            preAlarmDuration.setSummary(getString(R.string.prealarm_off_summary));
         } else {
-            listPref.setSummary(getString(R.string.prealarm_summary, i));
+            preAlarmDuration.setSummary(getString(R.string.prealarm_summary, i));
         }
     }
 
-    private void refresh() {
+    @Override
+    protected void onResume() {
+        super.onResume();
         final int silentModeStreams = Settings.System.getInt(getContentResolver(),
                 Settings.System.MODE_RINGER_STREAMS_AFFECTED, 0);
         alarmInSilentModePref.setChecked((silentModeStreams & ALARM_STREAM_TYPE_BIT) == 0);
 
         snoozeListPref.setSummary(snoozeListPref.getEntry());
-        snoozeListPref.setOnPreferenceChangeListener(this);
+        snoozeListPref.setOnPreferenceChangeListener(new OnPreferenceChangeListener() {
+            @Override
+            public boolean onPreferenceChange(Preference preference, Object newValue) {
+                final int idx = snoozeListPref.findIndexOfValue((String) newValue);
+                snoozeListPref.setSummary(snoozeListPref.getEntries()[idx]);
+                return true;
+            }
+        });
 
-        String delay = autoSilencePreference.getValue();
-        updateAutoSnoozeSummary(autoSilencePreference, delay);
-        autoSilencePreference.setOnPreferenceChangeListener(this);
+        updateAutoSnoozeSummary(autoSilencePreference.getValue());
+        autoSilencePreference.setOnPreferenceChangeListener(new OnPreferenceChangeListener() {
+            @Override
+            public boolean onPreferenceChange(Preference preference, Object newValue) {
+                updateAutoSnoozeSummary((String) newValue);
+                return true;
+            }
+        });
 
-        updatePreAlarmDurationSummary(preAlarmDuration, preAlarmDuration.getValue());
-        preAlarmDuration.setOnPreferenceChangeListener(this);
+        updatePreAlarmDurationSummary(preAlarmDuration.getValue());
+        preAlarmDuration.setOnPreferenceChangeListener(new OnPreferenceChangeListener() {
+            @Override
+            public boolean onPreferenceChange(Preference preference, Object newValue) {
+                updatePreAlarmDurationSummary((String) newValue);
+                return true;
+            }
+        });
 
-        updateFadeInTimeSummary(fadeInTime, fadeInTime.getValue());
-        fadeInTime.setOnPreferenceChangeListener(this);
+        updateFadeInTimeSummary(fadeInTime.getValue());
+        fadeInTime.setOnPreferenceChangeListener(new OnPreferenceChangeListener() {
+            @Override
+            public boolean onPreferenceChange(Preference preference, Object newValue) {
+                updateFadeInTimeSummary((String) newValue);
+                return true;
+            }
+        });
 
         theme.setSummary(theme.getEntry());
     }

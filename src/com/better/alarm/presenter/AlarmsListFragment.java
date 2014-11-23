@@ -164,14 +164,16 @@ public class AlarmsListFragment extends RoboListFragment {
         switch (item.getItemId()) {
         case R.id.delete_alarm: {
             // Confirm that the alarm will be deleted.
-            new AlertDialog.Builder(getActivity()).setTitle(getString(R.string.delete_alarm))
+            new AlertDialog.Builder(getActivity())
+                    .setTitle(getString(R.string.delete_alarm))
                     .setMessage(getString(R.string.delete_alarm_confirm))
                     .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface d, int w) {
                             alarms.delete(alarm);
                         }
-                    }).setNegativeButton(android.R.string.cancel, null).show();
+                    }).setNegativeButton(android.R.string.cancel, null)
+                    .show();
             return true;
         }
 

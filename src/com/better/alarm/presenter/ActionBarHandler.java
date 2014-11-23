@@ -97,86 +97,90 @@ public class ActionBarHandler {
     }
 
     private void showReview() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
-        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id="
-                        + mContext.getApplicationContext().getPackageName()));
-                mContext.startActivity(intent);
-            }
-        });
-        builder.setTitle(R.string.review);
-        builder.setMessage(R.string.review_message);
-        builder.setCancelable(true);
-        builder.setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-            }
-        });
-        builder.create().show();
+        new AlertDialog.Builder(mContext)
+                .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id="
+                                + mContext.getApplicationContext().getPackageName()));
+                        mContext.startActivity(intent);
+                    }
+                })
+                .setTitle(R.string.review)
+                .setMessage(R.string.review_message)
+                .setCancelable(true)
+                .setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                    }
+                })
+                .create()
+                .show();
     }
 
     private void showDashClock() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
-        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id="
-                        + "net.nurik.roman.dashclock"));
-                mContext.startActivity(intent);
-            }
-        });
-        builder.setTitle(R.string.dashclock);
-        builder.setMessage(R.string.dashclock_message);
-        builder.setCancelable(true);
-        builder.setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-            }
-        });
-        builder.create().show();
+        new AlertDialog.Builder(mContext)
+                .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id="
+                                + "net.nurik.roman.dashclock"));
+                        mContext.startActivity(intent);
+                    }
+                })
+                .setTitle(R.string.dashclock)
+                .setMessage(R.string.dashclock_message)
+                .setCancelable(true)
+                .setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                    }
+                })
+                .create()
+                .show();
     }
 
     private void showMp3() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
-        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=mp3+cutter&c=app"));
-                mContext.startActivity(intent);
-            }
-        });
-        builder.setTitle(R.string.mp3cutter);
-        builder.setMessage(R.string.mp3cutter_message);
-        builder.setCancelable(true);
-        builder.setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-            }
-        });
-        builder.create().show();
+        new AlertDialog.Builder(mContext)
+                .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=mp3+cutter&c=app"));
+                        mContext.startActivity(intent);
+                    }
+                })
+                .setTitle(R.string.mp3cutter)
+                .setMessage(R.string.mp3cutter_message)
+                .setCancelable(true)
+                .setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                    }
+                })
+                .create()
+                .show();
     }
 
     private void showBugreport() {
         final EditText report = new EditText(mContext);
         report.setHint(R.string.bugreport_hint);
-        AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
-        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                ACRA.getErrorReporter().handleSilentException(new Exception(report.getText().toString()));
-            }
-        });
-        builder.setTitle(R.string.bugreport);
-        builder.setCancelable(true);
-        builder.setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-            }
-        });
-        builder.setView(report);
-        builder.create().show();
+        new AlertDialog.Builder(mContext)
+                .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        ACRA.getErrorReporter().handleSilentException(new Exception(report.getText().toString()));
+                    }
+                })
+                .setTitle(R.string.bugreport)
+                .setCancelable(true)
+                .setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                    }
+                })
+                .setView(report)
+                .create()
+                .show();
     }
 
 }

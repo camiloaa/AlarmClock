@@ -203,15 +203,15 @@ public class AlarmAlertReceiver extends Component {
                 "auto_silence", "10"));
         String text = mContext.getString(R.string.alarm_alert_alert_silenced, autoSilenceMinutes);
 
-        Notification.Builder nb = new Notification.Builder(mContext);
-        nb.setAutoCancel(true);
-        nb.setSmallIcon(R.drawable.stat_notify_alarm);
-        nb.setWhen(Calendar.getInstance().getTimeInMillis());
-        nb.setContentIntent(intent);
-        nb.setContentTitle(label);
-        nb.setContentText(text);
-        nb.setTicker(text);
-        Notification n = nb.getNotification();
+        Notification n = new Notification.Builder(mContext)
+                .setAutoCancel(true)
+                .setSmallIcon(R.drawable.stat_notify_alarm)
+                .setWhen(Calendar.getInstance().getTimeInMillis())
+                .setContentIntent(intent)
+                .setContentTitle(label)
+                .setContentText(text)
+                .setTicker(text)
+                .getNotification();
 
         // We have to cancel the original notification since it is in the
         // ongoing section and we want the "killed" notification to be a plain
