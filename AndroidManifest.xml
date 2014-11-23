@@ -97,9 +97,6 @@
             android:name=".model.AlarmsService$Receiver"
             android:exported="false" >
             <intent-filter>
-                <action android:name="com.better.alarm.ACTION_FIRED" />
-                <action android:name="com.better.alarm.ACTION_SNOOZED_FIRED" />
-                <action android:name="com.better.alarm.ACTION_SOUND_EXPIRED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />

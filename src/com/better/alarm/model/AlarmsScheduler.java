@@ -257,9 +257,10 @@ public class AlarmsScheduler implements IAlarmsScheduler, IComponent {
     private void setUpRTCAlarm(ScheduledAlarm alarm) {
         log.d("Set " + alarm.toString());
         Intent intent = new Intent(ACTION_FIRED);
+        intent.setClass(mContext, AlarmsService.class);
         intent.putExtra(EXTRA_ID, alarm.id);
         intent.putExtra(EXTRA_TYPE, alarm.type.name());
-        PendingIntent sender = PendingIntent.getBroadcast(mContext, 0, intent, PendingIntent.FLAG_CANCEL_CURRENT);
+        PendingIntent sender = PendingIntent.getService(mContext, 0, intent, PendingIntent.FLAG_CANCEL_CURRENT);
         setAlarmStrategy.setRTCAlarm(alarm, sender);
     }
 
