@@ -1,65 +1,68 @@
 @startuml
 hide empty fields
 hide empty methods
+'##################################
+'####   Model Implementation   ####
+'##################################
 
+class Bus<<(S,orange)>>
+class Alarms<<(S,orange)>>
+class Alarm<<(M,pink)>>
 
-package Presenters {
-    note "All presenters get Intents with IAlarm attached" as N1
-'Alert Presentation
-    class Klaxon {
-        Receiver
-        Service
-    }
-    Klaxon o-down- Alarm
-    class Alert {
-        AlertReciever
-        NM
-        AlertActivityFS
-        AlertActivity
-    }
-    Alert o-down- Alarm
-    'Scheduled presentation
-    StatusPresenters o-down- Alarm
+class DataBaseService<<(S,orange)>>
+Alarm -down-> DataBaseService : save
+Alarm -down-> Bus
+Alarms o-left- Alarm
 
+'############################
+'####   Presentation     ####
+'############################
+
+class Alert<EventListener><<(S,orange)>> {
+}
     
-'Alarms presentation
-    class ListFragment
-    class DetailsFragment
-
-    ListFragment o-down- IAlarms
-    ListFragment -right-> DetailsFragment : Alarm
-    DetailsFragment o-down- Alarm
-
+class Klaxon<EventListener><<(S,orange)>> {
 }
 
-'model
-    interface IAlarms
-    class Alarms
-    Alarms .down.|> IAlarms
+class ToastPresenter<EventListener><<(S,orange)>> {
+}
 
-    class DataBaseService
-    AlarmCore -right-> DataBaseService : hibernate
+Alert -down-> Alarm
 
-    interface Alarm {
-        Calendar getCalendar(CalendarType)
-    }
-    class AlarmCore
-    AlarmCore .down.|> Alarm
-    AlarmCore -down-> BroadcastMediator : status changed
-    Alarms o-- AlarmCore
+'Alarm editing
+class ListFragment<<(S,orange)>>
+class DetailsFragment<<(M,pink)>>
+ListFragment -down-> Alarm : edit
+DetailsFragment -down-> Alarm : edit
 
-'Timed events
-    class Scheduler
-    class AlarmsService
+'adding new alarms
+class ActionBarHandler<<(S,orange)>>
+ActionBarHandler -down-> Alarms :create, delete
 
-    AlarmCore o-- Scheduler
-    Scheduler -left-> AndroidAlarmsManager : set alarm
-    Scheduler -right-> BroadcastMediator : scheduled
-    AndroidAlarmsManager -up-> AlarmsService : fire alarm
-    AlarmsService o-right-> AlarmCore : onAlarmFired
-    
-    'OS
-    class AndroidAlarmsManager
-    class BroadcastMediator
+'##################################
+'####         Firing           ####
+'##################################
+class Scheduler<<(S,orange)>>
+class AlarmsService<<(S,orange)>>
+class AndroidAlarmsManager<<(A,green)>>
+
+Alarm -down-> Scheduler
+Scheduler -down-> AndroidAlarmsManager : set alarm
+Scheduler -down-> Bus : scheduled
+
+class AndroidBroadcast<<(A,green)>>  
+AndroidBroadcast -down-> AlarmsService : fire\ntime changed\nboot completed
+AlarmsService -down-> Alarm : onAlarmFired
+
+'##################################
+'####   Keep alive and awake   ####
+'##################################
+
+note as N1
+Somehow start service sticky
+Only call stopSelf when all presenters are done and after a timout   
+also grab wakelocks
+should we start service if activity is active?    
+end note
 
 @enduml
