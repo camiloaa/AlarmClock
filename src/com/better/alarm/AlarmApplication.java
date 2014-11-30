@@ -24,6 +24,7 @@ import org.acra.annotation.ReportsCrashes;
 import roboguice.RoboGuice;
 import android.app.Application;
 import android.content.Context;
+import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.view.ViewConfiguration;
 
@@ -86,6 +87,7 @@ public class AlarmApplication extends Application {
                         binder.bind(AlarmsScheduler.class).in(Scopes.SINGLETON);
                         binder.bind(IAlarmsScheduler.class).to(AlarmsScheduler.class).in(Scopes.SINGLETON);
                         binder.bind(DynamicThemeHandler.class).in(Scopes.SINGLETON);
+                        binder.bind(Looper.class).toInstance(Looper.getMainLooper());
                     }
                 }));
 

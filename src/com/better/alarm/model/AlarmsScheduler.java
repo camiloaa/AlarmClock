@@ -34,14 +34,15 @@ import com.better.alarm.events.AlarmSceduledEvent;
 import com.better.alarm.events.AlarmUnscheduledEvent;
 import com.better.alarm.events.IBus;
 import com.better.alarm.events.RequestScheduledUnscheduledStatus;
+import com.github.androidutils.factories.IntentFactory;
 import com.github.androidutils.logger.Logger;
 import com.google.inject.Inject;
 import com.squareup.otto.Subscribe;
 
 public class AlarmsScheduler implements IAlarmsScheduler, IComponent {
-    static final String ACTION_FIRED = "com.better.alarm.ACTION_FIRED";
-    static final String EXTRA_ID = "intent.extra.alarm";
-    static final String EXTRA_TYPE = "intent.extra.type";
+    public static final String ACTION_FIRED = "com.better.alarm.ACTION_FIRED";
+    public static final String EXTRA_ID = "intent.extra.alarm";
+    public static final String EXTRA_TYPE = "intent.extra.type";
 
     private interface ISetAlarmStrategy {
         void setRTCAlarm(ScheduledAlarm alarm, PendingIntent sender);
@@ -95,6 +96,7 @@ public class AlarmsScheduler implements IAlarmsScheduler, IComponent {
     @Inject private Context mContext;
     @Inject private Logger log;
     @Inject private IBus bus;
+    @Inject private IntentFactory intents;
 
     public AlarmsScheduler() {
         queue = new PriorityQueue<ScheduledAlarm>();
@@ -186,7 +188,7 @@ public class AlarmsScheduler implements IAlarmsScheduler, IComponent {
             // remove happens in fire
             ScheduledAlarm firedInThePastAlarm = queue.poll();
             log.d("In the past - " + firedInThePastAlarm.toString());
-            Intent intent = new Intent(ACTION_FIRED);
+            Intent intent = intents.createIntent(ACTION_FIRED);
             intent.putExtra(EXTRA_ID, firedInThePastAlarm.id);
             intent.putExtra(EXTRA_TYPE, firedInThePastAlarm.type.name());
             mContext.sendBroadcast(intent);
@@ -249,18 +251,18 @@ public class AlarmsScheduler implements IAlarmsScheduler, IComponent {
 
     private void removeRTCAlarm() {
         AlarmManager am = (AlarmManager) mContext.getSystemService(Context.ALARM_SERVICE);
-        PendingIntent sender = PendingIntent.getBroadcast(mContext, 0, new Intent(ACTION_FIRED),
+        PendingIntent sender = intents.getPendingService(mContext, 0, intents.createIntent(ACTION_FIRED),
                 PendingIntent.FLAG_CANCEL_CURRENT);
         am.cancel(sender);
     }
 
     private void setUpRTCAlarm(ScheduledAlarm alarm) {
         log.d("Set " + alarm.toString());
-        Intent intent = new Intent(ACTION_FIRED);
+        Intent intent = intents.createIntent(ACTION_FIRED);
         intent.setClass(mContext, AlarmsService.class);
         intent.putExtra(EXTRA_ID, alarm.id);
         intent.putExtra(EXTRA_TYPE, alarm.type.name());
-        PendingIntent sender = PendingIntent.getService(mContext, 0, intent, PendingIntent.FLAG_CANCEL_CURRENT);
+        PendingIntent sender = intents.getPendingService(mContext, 0, intent, PendingIntent.FLAG_CANCEL_CURRENT);
         setAlarmStrategy.setRTCAlarm(alarm, sender);
     }
 
