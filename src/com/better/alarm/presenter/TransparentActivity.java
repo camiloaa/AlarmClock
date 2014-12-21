@@ -28,7 +28,7 @@ public class TransparentActivity extends RoboActivity implements AlarmTimePicker
         int id = intent.getIntExtra(Intents.EXTRA_ID, -1);
         try {
             alarm = alarmsManager.getAlarm(id);
-            logger.d("Alarm, that has to be rescheduled:" + alarm.getNextTime());
+            logger.d("Alarm, that has to be rescheduled:" + alarm.toString());
         } catch (AlarmNotFoundException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();

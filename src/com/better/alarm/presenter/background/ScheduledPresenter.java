@@ -27,7 +27,6 @@ import com.better.alarm.Component;
 import com.better.alarm.events.AlarmSceduledEvent;
 import com.better.alarm.events.AlarmUnscheduledEvent;
 import com.better.alarm.events.IBus;
-import com.better.alarm.model.interfaces.Alarm;
 import com.better.alarm.model.interfaces.AlarmNotFoundException;
 import com.better.alarm.model.interfaces.IAlarmsManager;
 import com.github.androidutils.logger.Logger;
@@ -54,7 +53,6 @@ public class ScheduledPresenter extends Component {
 
     @Subscribe
     public void handle(AlarmSceduledEvent event) throws AlarmNotFoundException {
-        Alarm alarm = alarms.getAlarm(event.id);
         // Broadcast intent for the notification bar
         Intent alarmChanged = new Intent("android.intent.action.ALARM_CHANGED");
         alarmChanged.putExtra("alarmSet", true);
@@ -64,7 +62,8 @@ public class ScheduledPresenter extends Component {
         // KeyGuard)
         // will react accordingly
         String format = android.text.format.DateFormat.is24HourFormat(context) ? DM24 : DM12;
-        Calendar calendar = alarm.isSnoozed() ? alarm.getSnoozedTime() : alarm.getNextTime();
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(event.nextNormalTimeInMillis);
         String timeString = (String) DateFormat.format(format, calendar);
         Settings.System.putString(context.getContentResolver(), Settings.System.NEXT_ALARM_FORMATTED,
                 timeString);

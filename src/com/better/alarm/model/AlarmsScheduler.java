@@ -28,6 +28,7 @@ import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 
 import com.better.alarm.IComponent;
 import com.better.alarm.events.AlarmSceduledEvent;
@@ -97,6 +98,7 @@ public class AlarmsScheduler implements IAlarmsScheduler, IComponent {
     @Inject private Logger log;
     @Inject private IBus bus;
     @Inject private IntentFactory intents;
+    @Inject private SharedPreferences sp;
 
     public AlarmsScheduler() {
         queue = new PriorityQueue<ScheduledAlarm>();
@@ -207,7 +209,27 @@ public class AlarmsScheduler implements IAlarmsScheduler, IComponent {
         if (queue.isEmpty()) {
             unscheduled();
         } else if (queue.peek().type != CalendarType.AUTOSILENCE) {
-            scheduled(queue.peek());
+            ScheduledAlarm scheduledAlarm = queue.peek();
+            AlarmSceduledEvent alarmSceduledEvent = new AlarmSceduledEvent();
+            alarmSceduledEvent.id = scheduledAlarm.id;
+
+            // here it gets messy, but i could not care much because refactored
+            // version is not far
+            if (scheduledAlarm.type == CalendarType.PREALARM) {
+                // we can only assume that the real one will be a little later,
+                // namely:
+                String asString = sp.getString("prealarm_duration", "30");
+                int prealarmMinutes = Integer.parseInt(asString);
+                int prealarmOffsetInMillis = prealarmMinutes * 60 * 1000;
+
+                alarmSceduledEvent.nextNormalTimeInMillis = scheduledAlarm.calendar.getTimeInMillis()
+                        + prealarmOffsetInMillis;
+                alarmSceduledEvent.isPrealarm = true;
+            } else {
+                alarmSceduledEvent.nextNormalTimeInMillis = scheduledAlarm.calendar.getTimeInMillis();
+            }
+
+            bus.post(alarmSceduledEvent);
         } else {
             // now this means that alarm in the closest future is AUTOSILENCE
             ScheduledAlarm scheduledAlarm = findNextNormalAlarm();

@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.format.DateFormat;
 import android.view.LayoutInflater;
@@ -42,6 +43,7 @@ public class InfoFragment extends RoboFragment implements ViewFactory {
     @Inject private Logger logger;
     @Inject private IBus bus;
     @Inject private Context context;
+    @Inject private SharedPreferences sp;
 
     private static final String DM12 = "E h:mm aa";
     private static final String DM24 = "E kk:mm";
@@ -52,11 +54,15 @@ public class InfoFragment extends RoboFragment implements ViewFactory {
     private Alarm alarm;
     private TickReceiver mTickReceiver;
 
+    private long milliseconds;
+
+    private boolean isPrealarm;
+
     private final class TickReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (alarm != null) {
-                remainingTime.setText(formatRemainingTimeString(alarm.getNextTime().getTimeInMillis()));
+                formatString();
             }
         }
     }
@@ -66,10 +72,15 @@ public class InfoFragment extends RoboFragment implements ViewFactory {
         logger.d(event);
         alarm = alarms.getAlarm(event.id);
         String format = android.text.format.DateFormat.is24HourFormat(context) ? DM24 : DM12;
-        Calendar calendar = alarm.isSnoozed() ? alarm.getSnoozedTime() : alarm.getNextTime();
+
+        milliseconds = event.nextNormalTimeInMillis;
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(milliseconds);
+
         String timeString = (String) DateFormat.format(format, calendar);
         textView.setText(timeString);
-        remainingTime.setText(formatRemainingTimeString(alarm.getNextTime().getTimeInMillis()));
+        isPrealarm = event.isPrealarm;
+        formatString();
     }
 
     @Subscribe
@@ -78,7 +89,6 @@ public class InfoFragment extends RoboFragment implements ViewFactory {
         textView.setText("");
         remainingTime.setText("");
         alarm = null;
-
     }
 
     @Override
@@ -145,6 +155,16 @@ public class InfoFragment extends RoboFragment implements ViewFactory {
 
         String[] formats = getActivity().getResources().getStringArray(R.array.alarm_set_short);
         return String.format(formats[index], daySeq, hourSeq, minSeq);
+    }
+
+    private void formatString() {
+        if (isPrealarm) {
+            int duration = Integer.parseInt(sp.getString("prealarm_duration", "-1"));
+            remainingTime.setText(formatRemainingTimeString(milliseconds) + "\n"
+                    + getResources().getString(R.string.prealarm_summary, duration));
+        } else {
+            remainingTime.setText(formatRemainingTimeString(milliseconds));
+        }
     }
 
     @Override

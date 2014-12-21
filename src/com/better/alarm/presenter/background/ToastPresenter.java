@@ -48,7 +48,7 @@ public class ToastPresenter extends Component {
     public void handle(AlarmSetEvent alarmSetEvent) throws AlarmNotFoundException {
         Alarm alarm = alarms.getAlarm(alarmSetEvent.id);
         if (alarm.isEnabled()) {
-            popAlarmSetToast(context, alarm);
+            popAlarmSetToast(context, alarm, alarmSetEvent.millis);
         } else {
             logger.w("Alarm " + alarmSetEvent.id + " is already disabled");
         }
@@ -68,19 +68,21 @@ public class ToastPresenter extends Component {
         sToast = null;
     }
 
-    static void popAlarmSetToast(Context context, Alarm alarm) {
+    static void popAlarmSetToast(Context context, Alarm alarm, long timeInMillis) {
         String toastText;
-        if (alarm.isEnabled()) {
-            long timeInMillis = alarm.getNextTime().getTimeInMillis();
-            toastText = formatToast(context, timeInMillis);
-            Toast toast = Toast.makeText(context, toastText, Toast.LENGTH_LONG);
-            ToastPresenter.setToast(toast);
-            toast.show();
-        }
+        toastText = formatToast(context, timeInMillis);
+        Toast toast = Toast.makeText(context, toastText, Toast.LENGTH_LONG);
+        ToastPresenter.setToast(toast);
+        toast.show();
     }
 
     /**
      * format "Alarm set for 2 days 7 hours and 53 minutes from now"
+     * 
+     * If prealarm is on it will be
+     * 
+     * "Alarm set for 2 days 7 hours and 53 minutes from now. Prealarm will
+     * start 30 minutes before the main alarm".
      */
     static String formatToast(Context context, long timeInMillis) {
         long delta = timeInMillis - System.currentTimeMillis();

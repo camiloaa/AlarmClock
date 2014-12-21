@@ -119,6 +119,8 @@ public final class AlarmCore implements Alarm {
     public interface IStateNotifier {
         public void broadcastAlarmState(int id, String action);
 
+        public void broadcastAlarmState(int id, String action, long millis);
+
     }
 
     @Inject private IAlarmsScheduler mAlarmsScheduler;
@@ -397,14 +399,14 @@ public final class AlarmCore implements Alarm {
             public void enter() {
                 int what = getCurrentMessage().what();
                 if (what == DISMISS || what == SNOOZE || what == CHANGE) {
-                    broadcastAlarmState(AlarmSetEvent.class);
+                    broadcastAlarmSetWithNormalTime(calculateNextTime().getTimeInMillis());
                 }
             }
 
             @Override
             public void resume() {
                 Calendar nextTime = calculateNextTime();
-                setAlarm(nextTime);
+                setAlarm(nextTime, CalendarType.NORMAL);
             }
 
             @Override
@@ -482,7 +484,7 @@ public final class AlarmCore implements Alarm {
                     nextTime = getNextRegualarSnoozeCalendar();
                 }
 
-                setAlarm(nextTime);
+                setAlarm(nextTime, CalendarType.NORMAL);
                 broadcastAlarmState(SnoozedEvent.class);
             }
 
@@ -524,7 +526,7 @@ public final class AlarmCore implements Alarm {
                 if (what == DISMISS || what == SNOOZE || what == CHANGE) {
                     // TODO
                     log.w("This does not work as it broadcasts before alarm was changed. We should get rid of enter()!");
-                    broadcastAlarmState(AlarmSetEvent.class);
+                    broadcastAlarmSetWithNormalTime(calculateNextTime().getTimeInMillis());
                 }
             }
 
@@ -536,7 +538,7 @@ public final class AlarmCore implements Alarm {
                 // past, so it has to be adjusted.
                 advanceCalendar(c);
                 if (c.after(Calendar.getInstance())) {
-                    setAlarm(c);
+                    setAlarm(c, CalendarType.PREALARM);
                 } else {
                     // TODO this should never happen
                     log.e("PreAlarm is still in the past!");
@@ -566,7 +568,7 @@ public final class AlarmCore implements Alarm {
             @Override
             public void enter() {
                 broadcastAlarmState(PrealarmFiredEvent.class);
-                setAlarm(calculateNextTime());
+                setAlarm(calculateNextTime(), CalendarType.NORMAL);
             }
 
             @Override
@@ -616,7 +618,7 @@ public final class AlarmCore implements Alarm {
                     nextTime = calculateNextTime();
                 }
 
-                setAlarm(nextTime);
+                setAlarm(nextTime, CalendarType.NORMAL);
                 broadcastAlarmState(SnoozedEvent.class);
             }
 
@@ -654,8 +656,12 @@ public final class AlarmCore implements Alarm {
             }
         }
 
-        private void setAlarm(Calendar calendar) {
-            setAlarm(calendar, CalendarType.NORMAL);
+        private void broadcastAlarmSetWithNormalTime(long millis) {
+            AlarmSetEvent setEvent = new AlarmSetEvent();
+            setEvent.id = container.getId();
+            setEvent.alarm = AlarmCore.this;
+            setEvent.millis = millis;
+            bus.post(setEvent);
         }
 
         private void setAlarm(Calendar calendar, CalendarType calendarType) {
@@ -867,30 +873,6 @@ public final class AlarmCore implements Alarm {
     // ++++++ getters for GUI +++++++++++++++++++++++++++++++
     // ++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-    /**
-     * TODO calendar should be immutable
-     * 
-     * @return
-     */
-    @Override
-    public Calendar getNextTime() {
-        return container.getNextTime();
-    }
-
-    @Override
-    public Calendar getSnoozedTime() {
-        // TODO this might not work :-)
-        // actually these getters should be replaced with extras to intents
-        return container.getNextTime();
-    }
-
-    @Override
-    public Calendar getPrealarmTime() {
-        // TODO this might not work :-)
-        // actually these getters should be replaced with extras to intents
-        return container.getNextTime();
-    }
-
     @Override
     public boolean isPrealarm() {
         return container.isPrealarm();
@@ -980,5 +962,11 @@ public final class AlarmCore implements Alarm {
     @Override
     public AlarmEditor edit() {
         return new AlarmEditor(this);
+    }
+
+    @Override
+    @Deprecated
+    public Calendar getSnoozedTime() {
+        return container.getNextTime();
     }
 }
