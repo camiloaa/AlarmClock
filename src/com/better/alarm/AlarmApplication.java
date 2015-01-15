@@ -36,6 +36,7 @@ import com.better.alarm.model.IAlarmsScheduler;
 import com.better.alarm.model.interfaces.IAlarmsManager;
 import com.better.alarm.presenter.DynamicThemeHandler;
 import com.better.alarm.presenter.alert.AlarmAlertReceiver;
+import com.better.alarm.presenter.background.CameraFlashlightPresenter;
 import com.better.alarm.presenter.background.KlaxonPresenter;
 import com.better.alarm.presenter.background.ScheduledPresenter;
 import com.better.alarm.presenter.background.ToastPresenter;
@@ -133,6 +134,7 @@ public class AlarmApplication extends Application {
         injector.getInstance(ScheduledPresenter.class).init();
         injector.getInstance(KlaxonPresenter.class).init();
         injector.getInstance(AlarmAlertReceiver.class).init();
+        injector.getInstance(CameraFlashlightPresenter.class).init();
 
         logger.d("onCreate");
         super.onCreate();
