@@ -23,6 +23,8 @@ import java.util.Iterator;
 import java.util.Locale;
 import java.util.PriorityQueue;
 
+import javax.inject.Inject;
+
 import android.annotation.TargetApi;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
@@ -98,6 +100,7 @@ public class AlarmsScheduler implements IAlarmsScheduler {
     private final ISetAlarmStrategy setAlarmStrategy;
     private final AlarmManager am;
 
+    @Inject
     public AlarmsScheduler(Context context, Logger logger) {
         mContext = context;
         am = (AlarmManager) mContext.getSystemService(Context.ALARM_SERVICE);

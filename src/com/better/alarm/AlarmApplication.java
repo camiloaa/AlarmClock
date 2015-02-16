@@ -24,18 +24,29 @@ import org.acra.ExceptionHandlerInitializer;
 import org.acra.ReportField;
 import org.acra.annotation.ReportsCrashes;
 
+import roboguice.RoboGuice;
 import android.app.Application;
 import android.content.Context;
+import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.view.ViewConfiguration;
 
+import com.better.alarm.events.IBus;
+import com.better.alarm.model.AlarmStateNotifier;
 import com.better.alarm.model.AlarmsManager;
+import com.better.alarm.model.AlarmsScheduler;
+import com.better.alarm.model.IAlarmsScheduler;
 import com.better.alarm.presenter.DynamicThemeHandler;
 import com.github.androidutils.logger.LogcatLogWriterWithLines;
 import com.github.androidutils.logger.Logger;
 import com.github.androidutils.logger.LoggingExceptionHandler;
 import com.github.androidutils.logger.StartupLogWriter;
 import com.github.androidutils.wakelock.WakeLockManager;
+import com.google.inject.Binder;
+import com.google.inject.Injector;
+import com.google.inject.Module;
+import com.google.inject.Scopes;
+import com.google.inject.util.Modules;
 
 // @formatter:off
 @ReportsCrashes(
@@ -56,6 +67,8 @@ public class AlarmApplication extends Application {
 
     @Override
     public void onCreate() {
+        RoboGuice.setUseAnnotationDatabases(false);
+
         // The following line triggers the initialization of ACRA
         ACRA.init(this);
         DynamicThemeHandler.init(this);
@@ -72,13 +85,26 @@ public class AlarmApplication extends Application {
             // Ignore
         }
 
-        Logger logger = Logger.getDefaultLogger();
+        final Logger logger = Logger.getDefaultLogger();
         logger.addLogWriter(LogcatLogWriterWithLines.getInstance());
         logger.addLogWriter(StartupLogWriter.getInstance());
         LoggingExceptionHandler.addLoggingExceptionHandlerToAllThreads(logger);
 
         WakeLockManager.init(getApplicationContext(), new Logger(), true);
-        AlarmsManager.init(getApplicationContext(), logger);
+
+        Injector injector = RoboGuice.getOrCreateBaseApplicationInjector(this, RoboGuice.DEFAULT_STAGE,
+                Modules.override(RoboGuice.newDefaultRoboModule(this)).with(new Module() {
+                    @Override
+                    public void configure(Binder binder) {
+                        binder.bind(IAlarmsScheduler.class).to(AlarmsScheduler.class).in(Scopes.SINGLETON);
+                        binder.bind(AlarmsScheduler.class).in(Scopes.SINGLETON);
+                        binder.bind(Logger.class).toInstance(logger);
+                        binder.bind(IBus.class).to(AlarmStateNotifier.class).in(Scopes.SINGLETON);
+                        binder.bind(Looper.class).toInstance(Looper.getMainLooper());
+                    }
+                }));
+
+        AlarmsManager.init(getApplicationContext(), logger, injector.getInstance(AlarmsScheduler.class));
 
         ACRA.getErrorReporter().setExceptionHandlerInitializer(new ExceptionHandlerInitializer() {
             @Override

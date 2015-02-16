@@ -24,6 +24,7 @@ import java.util.Map;
 
 import org.acra.ACRA;
 
+import roboguice.RoboGuice;
 import android.annotation.SuppressLint;
 import android.content.ContentResolver;
 import android.content.Context;
@@ -56,7 +57,6 @@ public class Alarms implements IAlarmsManager {
 
     private final ContentResolver mContentResolver;
     private final Map<Integer, AlarmCore> alarms;
-    private final AlarmStateNotifier broadcaster;
 
     private final DatabaseRetryCountDownTimer databaseRetryCountDownTimer;
 
@@ -67,7 +67,6 @@ public class Alarms implements IAlarmsManager {
 
         mContentResolver = mContext.getContentResolver();
         alarms = new HashMap<Integer, AlarmCore>();
-        broadcaster = new AlarmStateNotifier(mContext);
 
         databaseRetryCountDownTimer = new DatabaseRetryCountDownTimer(RETRY_TOTAL_TIME, RETRY_INTERVAL);
 
@@ -90,7 +89,7 @@ public class Alarms implements IAlarmsManager {
                 if (cursor.moveToFirst()) {
                     do {
                         AlarmContainer container = new AlarmContainer(cursor, log, mContext);
-                        final AlarmCore a = new AlarmCore(container, mContext, log, mAlarmsScheduler, broadcaster);
+                        final AlarmCore a = new AlarmCore(container, RoboGuice.getInjector(mContext));
                         alarms.put(a.getId(), a);
                     } while (cursor.moveToNext());
                 }
@@ -131,7 +130,7 @@ public class Alarms implements IAlarmsManager {
     @Override
     public Alarm createNewAlarm() {
         AlarmContainer container = new AlarmContainer(log, mContext);
-        AlarmCore alarm = new AlarmCore(container, mContext, log, mAlarmsScheduler, broadcaster);
+        AlarmCore alarm = new AlarmCore(container, RoboGuice.getInjector(mContext));
         alarms.put(alarm.getId(), alarm);
         notifyAlarmListChangedListeners();
         return alarm;

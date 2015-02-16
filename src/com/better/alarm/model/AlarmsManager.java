@@ -40,11 +40,11 @@ public class AlarmsManager {
         return sModelInstance;
     }
 
-    public static void init(Context context, Logger logger) {
+    public static void init(Context context, Logger logger, AlarmsScheduler alarmsScheduler) {
         if (sModelInstance == null) {
-            sModelInstance = new Alarms(context, logger, new AlarmsScheduler(context, logger));
+            sModelInstance = new Alarms(context, logger, alarmsScheduler);
         } else {
-            sModelInstance = new Alarms(context, logger, new AlarmsScheduler(context, logger));
+            sModelInstance = new Alarms(context, logger, alarmsScheduler);
             ACRA.getErrorReporter().handleException(new Exception("Attept to reinitialize!"));
         }
     }
